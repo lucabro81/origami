@@ -1,6 +1,22 @@
 [package]
 name = "origami-cli"
-version = "0.1.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+default-run = "origami"
+
+[[bin]]
+name = "origami"
+path = "src/main.rs"
 
 [dependencies]
+origami-runtime.workspace = true
+origami-codegen.workspace = true
+origami-router.workspace = true
+origami-data.workspace = true
+origami-dev.workspace = true
+origami-i18n.workspace = true
+origami-test.workspace = true
+origami-a11y.workspace = true
+clap.workspace = true
+miette.workspace = true

@@ -34,3 +34,9 @@ snapshots/
 
 # ── Misc ──────────────────────────────────────────────────────────────
 *.log
+
+# ── Working documentation (kept local, not published) ─────────────────
+framework-spec.md
+milestones.md
+backlog.md
+blocks/

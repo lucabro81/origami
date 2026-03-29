@@ -1,0 +1,3 @@
+[workspace]
+members = [ "crates/origami-a11y", "crates/origami-analyzer", "crates/origami-cli", "crates/origami-codegen", "crates/origami-data", "crates/origami-dev", "crates/origami-i18n", "crates/origami-lexer", "crates/origami-parser", "crates/origami-router","crates/origami-runtime", "crates/origami-test"]
+resolver = "3"

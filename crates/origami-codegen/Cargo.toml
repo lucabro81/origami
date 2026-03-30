@@ -7,3 +7,5 @@ rust-version.workspace = true
 [dependencies]
 origami-runtime.workspace = true
 origami-analyzer.workspace = true
+origami-lexer.workspace = true
+origami-parser.workspace = true

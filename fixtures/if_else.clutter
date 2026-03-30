@@ -1,0 +1,10 @@
+component MainComponent(props: Props) {
+const isVisible = true;
+----
+<if condition={isVisible}>
+  <Text value="visible" />
+<else>
+  <Text value="hidden" />
+</else>
+</if>
+}

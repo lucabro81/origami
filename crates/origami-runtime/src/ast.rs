@@ -1,0 +1,198 @@
+use crate::position::Position;
+
+/// Value of a component prop.
+///
+/// A prop can have a string literal value — to be validated against the design
+/// system — or a TypeScript expression — evaluated at runtime.
+#[derive(Debug, Clone, PartialEq)]
+pub enum PropValue {
+    /// String literal: `gap="md"`. Must be present in the design system.
+    StringValue(String),
+    /// TypeScript expression: `gap={myVar}`. The identifier name is checked
+    /// by the analyzer against bindings declared in the logic block.
+    ExpressionValue(String),
+    /// Explicit unsafe bypass: `gap="unsafe('16px', 'not in the design yet')"`.
+    /// The `value` is passed through without token validation; `reason` must be
+    /// non-empty or the analyzer emits CLT106.
+    UnsafeValue { value: String, reason: String },
+}
+
+/// An event binding `@event={handler}` on a component tag.
+///
+/// The event name (e.g. `"click"`) and handler identifier (e.g. `"addRule"`)
+/// are stored verbatim. The analyzer validates that `handler` is declared in
+/// the logic block (CLT104); the codegen emits `@{name}="{handler}"` on the
+/// generated HTML element.
+#[derive(Debug, Clone, PartialEq)]
+pub struct EventBinding {
+    /// Event name without the `@` prefix (e.g. `"click"`, `"input"`).
+    pub name: String,
+    /// Handler identifier declared in the logic block (e.g. `"addRule"`).
+    pub handler: String,
+    /// Position of the `@` in the source.
+    pub pos: Position,
+}
+
+/// A single `name=value` prop on a component.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PropNode {
+    /// Prop name (e.g. `"gap"`, `"size"`).
+    pub name: String,
+    /// Prop value (string or expression).
+    pub value: PropValue,
+    /// Position in the source (first character of the name).
+    pub pos: Position,
+}
+
+/// A component from the closed vocabulary (e.g. `<Column>`, `<Text />`).
+#[derive(Debug, Clone, PartialEq)]
+pub struct ComponentNode {
+    /// Component name (e.g. `"Column"`, `"Text"`).
+    pub name: String,
+    /// Props declared on the opening tag.
+    pub props: Vec<PropNode>,
+    /// Event bindings declared on the opening tag (e.g. `@click={handler}`).
+    pub events: Vec<EventBinding>,
+    /// Children: present only if the tag is not self-closing.
+    pub children: Vec<Node>,
+    /// Position of the opening tag in the source.
+    pub pos: Position,
+}
+
+/// Static text between tags (not an interpolation, not structural whitespace).
+#[derive(Debug, Clone, PartialEq)]
+pub struct TextNode {
+    /// The raw text.
+    pub value: String,
+    /// Position in the source.
+    pub pos: Position,
+}
+
+/// Interpolation of a TypeScript expression in the template: `{expr}`.
+///
+/// The expression name is checked by the analyzer (CLT104) against bindings
+/// declared in the logic block.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ExpressionNode {
+    /// Name of the interpolated identifier (e.g. `"title"`, `"count"`).
+    pub value: String,
+    /// Position in the source.
+    pub pos: Position,
+}
+
+/// Conditional node `<if condition={expr}>…</if>` with an optional else branch.
+#[derive(Debug, Clone, PartialEq)]
+pub struct IfNode {
+    /// The condition expression (identifier name).
+    pub condition: String,
+    /// Children of the `then` branch (between `<if>` and `<else>` or `</if>`).
+    pub then_children: Vec<Node>,
+    /// Children of the `else` branch, present only if the `<else>` tag is declared.
+    pub else_children: Option<Vec<Node>>,
+    /// Position of the `<if>` tag in the source.
+    pub pos: Position,
+}
+
+/// Unsafe escape-hatch block `<unsafe reason="...">…</unsafe>`.
+///
+/// Permits complex `{}` expressions inside the template (CLT107 is suppressed
+/// within this block). Requires a non-empty `reason`; an empty reason causes
+/// the analyzer to emit CLT105.
+#[derive(Debug, Clone, PartialEq)]
+pub struct UnsafeNode {
+    /// The mandatory justification for bypassing design-system rules.
+    pub reason: String,
+    /// Children of the unsafe block (may include complex expressions).
+    pub children: Vec<Node>,
+    /// Position of the `<unsafe>` tag in the source.
+    pub pos: Position,
+}
+
+/// Iteration node `<each collection={expr} as="alias" indexAs="i">…</each>`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct EachNode {
+    /// The collection expression (identifier name).
+    pub collection: String,
+    /// The alias assigned to the current element (local binding for children).
+    pub alias: String,
+    /// Optional index alias exposed as a scoped variable inside the loop body.
+    /// Corresponds to `indexAs="i"` on the `<each>` tag.
+    pub index_alias: Option<String>,
+    /// Children of the loop body.
+    pub children: Vec<Node>,
+    /// Position of the `<each>` tag in the source.
+    pub pos: Position,
+}
+
+/// A template node: the union of all possible node types.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Node {
+    /// Closed-vocabulary component (e.g. `<Column>`, `<Text />`).
+    Component(ComponentNode),
+    /// Static text.
+    Text(TextNode),
+    /// Expression interpolation `{expr}`.
+    Expr(ExpressionNode),
+    /// Conditional `<if>`.
+    If(IfNode),
+    /// Iteration `<each>`.
+    Each(EachNode),
+    /// Unsafe escape-hatch block `<unsafe>`.
+    Unsafe(UnsafeNode),
+}
+
+/// A single component definition inside a `.clutter` file.
+///
+/// Corresponds to one `component Name(props_raw) { … }` block.
+/// The props signature and logic block are treated as opaque TypeScript by the
+/// compiler; only the template is parsed into an AST.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ComponentDef {
+    /// Component name as declared (e.g. `"MainComponent"`, `"Card"`).
+    pub name: String,
+    /// Raw props signature — everything between `(` and `)`. Opaque TypeScript.
+    pub props_raw: String,
+    /// Raw content of the TypeScript logic block (between `component … {` and `----`).
+    pub logic_block: String,
+    /// Top-level nodes of the component template (after `----`).
+    pub template: Vec<Node>,
+}
+
+/// The root of the AST produced by the parser.
+///
+/// A `.clutter` file may contain one or more named component blocks:
+///
+/// ```text
+/// component MainComponent(props: MainProps) {
+///     [TypeScript logic block — opaque]
+///     ----
+///     [template — AST nodes]
+/// }
+/// ```
+pub struct FileNode {
+    /// All component definitions declared in the file, in source order.
+    pub components: Vec<Definition>,
+}
+
+pub enum Definition {
+    Component(ComponentDef),
+    Page(PageDef),
+    Layout(LayoutDef),
+}
+
+// PageDef and LayoutDef have the same shape as ComponentDef for now:
+pub struct PageDef {
+    pub name: String,
+    pub props_raw: String,
+    pub logic_block: Option<String>,
+    pub template: Vec<Node>,
+}
+
+pub struct LayoutDef {
+    pub name: String,
+    pub props_raw: String,
+    pub logic_block: Option<String>,
+    pub template: Vec<Node>,
+}
+
+

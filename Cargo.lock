@@ -516,6 +516,7 @@ dependencies = [
 name = "origami-analyzer"
 version = "0.1.0"
 dependencies = [
+ "origami-lexer",
  "origami-parser",
  "origami-runtime",
 ]
@@ -541,6 +542,8 @@ name = "origami-codegen"
 version = "0.1.0"
 dependencies = [
  "origami-analyzer",
+ "origami-lexer",
+ "origami-parser",
  "origami-runtime",
 ]
 
@@ -599,6 +602,8 @@ dependencies = [
 name = "origami-runtime"
 version = "0.1.0"
 dependencies = [
+ "serde",
+ "serde_json",
  "thiserror",
 ]
 

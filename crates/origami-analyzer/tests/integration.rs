@@ -1,0 +1,105 @@
+use origami_analyzer::{analyze_file, DesignTokens};
+use origami_lexer::tokenize;
+use origami_parser::Parser;
+
+fn fixture(name: &str) -> String {
+    let path = format!(
+        "{}/../../fixtures/{}.clutter",
+        env!("CARGO_MANIFEST_DIR"),
+        name
+    );
+    std::fs::read_to_string(&path).unwrap_or_else(|_| panic!("fixture not found: {}", path))
+}
+
+fn tokens_json() -> DesignTokens {
+    let path = format!("{}/../../tokens.json", env!("CARGO_MANIFEST_DIR"));
+    let src = std::fs::read_to_string(&path).unwrap_or_else(|_| panic!("tokens.json not found: {}", path));
+    DesignTokens::deserialize_json(&src).expect("tokens.json should parse")
+}
+
+fn pipeline(fixture_name: &str) -> (origami_runtime::FileNode, DesignTokens) {
+    let src = fixture(fixture_name);
+    let (tokens, lex_errors) = tokenize(&src);
+    assert!(lex_errors.is_empty(), "unexpected lex errors: {:?}", lex_errors);
+    let (file, parse_errors) = Parser::new(tokens).parse_file();
+    assert!(parse_errors.is_empty(), "unexpected parse errors: {:?}", parse_errors);
+    (file, tokens_json())
+}
+
+#[test]
+fn valid_file_no_errors() {
+    let (file, tokens) = pipeline("valid");
+    let (errors, _) = analyze_file(&file, &tokens);
+    assert!(errors.is_empty(), "expected no errors, got: {:?}", errors);
+}
+
+#[test]
+fn invalid_token_file_has_errors() {
+    let (file, tokens) = pipeline("invalid_token");
+    let (errors, _) = analyze_file(&file, &tokens);
+    assert!(!errors.is_empty(), "expected at least one error");
+    // gap="xl2" → CLT102
+    assert!(errors.iter().any(|e| e.message.contains("xl2")), "expected error for 'xl2'");
+    // size="huge" → CLT102
+    assert!(errors.iter().any(|e| e.message.contains("huge")), "expected error for 'huge'");
+}
+
+#[test]
+fn complex_file_no_errors() {
+    let (file, tokens) = pipeline("complex");
+    let (errors, _) = analyze_file(&file, &tokens);
+    assert!(errors.is_empty(), "expected no errors, got: {:?}", errors);
+}
+
+#[test]
+fn unsafe_block_file_emits_warning_no_errors() {
+    let (file, tokens) = pipeline("unsafe_block");
+    let (errors, warnings) = analyze_file(&file, &tokens);
+    assert!(errors.is_empty(), "expected no errors, got: {:?}", errors);
+    assert!(
+        warnings.iter().any(|w| w.code == "W001"),
+        "expected W001 warning for <unsafe> block, got: {:?}", warnings
+    );
+}
+
+#[test]
+fn unsafe_value_file_emits_warning_no_errors() {
+    let (file, tokens) = pipeline("unsafe_value");
+    let (errors, warnings) = analyze_file(&file, &tokens);
+    assert!(errors.is_empty(), "expected no errors, got: {:?}", errors);
+    assert!(
+        warnings.iter().any(|w| w.code == "W002"),
+        "expected W002 warning for unsafe() prop value, got: {:?}", warnings
+    );
+}
+
+#[test]
+fn clt107_complex_expr_file_has_error() {
+    let (file, tokens) = pipeline("clt107_complex_expr");
+    let (errors, _) = analyze_file(&file, &tokens);
+    assert!(
+        errors.iter().any(|e| e.message.contains("CLT107")),
+        "expected CLT107 error for complex expression, got: {:?}", errors
+    );
+}
+
+#[test]
+fn undeclared_identifier_has_clt104_error() {
+    let (file, tokens) = pipeline("undeclared_identifier");
+    let (errors, _) = analyze_file(&file, &tokens);
+    assert!(
+        errors.iter().any(|e| e.message.contains("CLT104")),
+        "expected CLT104 error for undeclared identifier, got: {:?}", errors
+    );
+    assert!(
+        errors.iter().any(|e| e.message.contains("undeclaredVar")),
+        "expected error to name the offending identifier, got: {:?}", errors
+    );
+}
+
+#[test]
+fn multi_component_valid_no_errors() {
+    let (file, tokens) = pipeline("multi_component");
+    let (errors, _) = analyze_file(&file, &tokens);
+    assert!(errors.is_empty(), "expected no errors on multi-component file, got: {:?}", errors);
+}

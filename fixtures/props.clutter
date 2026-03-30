@@ -1,0 +1,5 @@
+component MainComponent(props: Props) {
+const label = "hello";
+----
+<Text size="base" value={label} />
+}

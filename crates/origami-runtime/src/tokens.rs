@@ -1,49 +1,88 @@
+use logos::Logos;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Logos, Debug, Clone, PartialEq)]
+#[logos(skip r"[ \t\n\f]+")] // Ignore this regex pattern between tokens
 pub enum Token {
-    Component(String),
-    Divider,
-    StartTag,
-    EndTag,
-    EndAutoclosingTag,
-    OpenIf,
-    OpenElse,
-    OpenElseIf,
-    OpenEach,
-    OpenUnsafe,
+    #[token("component")]
+    KwComponent,        // component
+    #[token("page")]
+    KwPage,             // page
+    #[token("layout")]
+    KwLayout,           // layout
 
-    IfCondition,
-    EachCollection,
-    IndexAs,
-    As,
-    Reason,
-    Unsafe,
+    #[token("----")]
+    Divider,            // ----
 
+    #[token("<")]
+    StartTag,           // <
+    #[token(">")]
+    EndTag,             // >
+    #[token("/>")]
+    EndAutoclosingTag,  // /> 
+
+    #[token("<if")]
+    OpenIf,             // <if
+    #[token("<else")]
+    OpenElse,           // <else
+    #[token("<elseIf")]
+    OpenElseIf,         // <elseIf
+    #[token("<each")]
+    OpenEach,           // <each
+    #[token("<unsafe")]
+    OpenUnsafe,         // <unsafe
+
+    #[token("condition")]
+    IfCondition,        // condition
+    #[token("conditicollectionon")]
+    EachCollection,     // collection
+    #[token("indexAs")]
+    IndexAs,            // indexAs
+    #[token("as")]
+    As,                 // as
+    #[token("reason")]
+    Reason,             // reason
+    #[token("unsafe")]
+    Unsafe,             // unsafe
+
+    #[regex(r"[[:alpha:]]+", |lex| lex.slice().to_string())]
     Name(String),
+    TagName(String),
+    AttrName(String),
+    VariableName(String),
+
     Args(String),
     Logic(String),
     CloseTag(String),
-    TagName(String),
     UnsafeJs(String),
     UnsafeMarkup(String),
-    AttrName(String),
     Event(String),
+
+    #[regex(r"[[:digit:]]+", |lex| lex.slice().to_string())]
     ValueNumber(String),
+    #[regex(r#""[^"]*""#, |lex| lex.slice().to_string())]
     ValueString(String),
     ValueSimpleVariable(String),
-    VariableName(String),
 
-    OpenExpr, // {{
-    CloseExpr, // }}
-    OpenBody, // {
-    CloseBody, // }
-    OpenArgs, // (
-    CloseArgs, // )
+    #[token("{{")]
+    OpenExpr,   // {{
+    #[token("}}")]
+    CloseExpr,  // }}
+    #[token("{")]
+    OpenBody,   // {
+    #[token("}")]
+    CloseBody,  // }
+    #[token("(")]
+    OpenArgs,   // (
+    #[token(")")]
+    CloseArgs,  // )
 
-    CommaSeparator,
-    PeriodSeparator,
+    #[token(",")]
+    CommaSeparator,     // ,
+    #[token(".")]
+    PeriodSeparator,    // .
 
-    AttrAssign,
+    #[token("=")]
+    AttrAssign,         // =
 
     Eof,
 }

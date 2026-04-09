@@ -23,14 +23,14 @@ Do not load two block docs at the same time unless one is a direct dependency of
 
 ## Design documents
 
-- `design/opencode/quick-ref.md` — compact framework reference (use during coding)
-- `design/opencode/blocks/01-router.md` — file-based routing, `page`/`layout` keywords
-- `design/opencode/blocks/02-data-layer.md` — `endpoints.toml`, OpenAPI, typed handles
-- `design/opencode/blocks/03-dev-server.md` — `origami dev`, file watcher, Nuxt process
-- `design/opencode/blocks/04-i18n.md` — `t()`, locale validation
-- `design/opencode/blocks/05-testing.md` — `test`/`e2e` blocks, visual app, Playwright
-- `design/opencode/blocks/06-accessibility.md` — compile-time a11y rules
-- `design/opencode/blocks/07-cli.md` — `origami init`, `build`, `check`, `unsafe-report`, release
+- `design/quick-ref.md` — compact framework reference (use during coding)
+- `design/blocks/01-router.md` — file-based routing, `page`/`layout` keywords
+- `design/blocks/02-data-layer.md` — `endpoints.toml`, OpenAPI, typed handles
+- `design/blocks/03-dev-server.md` — `origami dev`, file watcher, Nuxt process
+- `design/blocks/04-i18n.md` — `t()`, locale validation
+- `design/blocks/05-testing.md` — `test`/`e2e` blocks, visual app, Playwright
+- `design/blocks/06-accessibility.md` — compile-time a11y rules
+- `design/blocks/07-cli.md` — `origami init`, `build`, `check`, `unsafe-report`, release
 - `design/framework-spec.md` — full spec, source of truth (load only when needed)
 - `design/backlog.md` — deferred items and future work (review after completing any block)
 

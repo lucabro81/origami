@@ -33,7 +33,7 @@ pub enum Token {
 
     #[token("condition")]
     IfCondition,        // condition
-    #[token("conditicollectionon")]
+    #[token("collection")]
     EachCollection,     // collection
     #[token("indexAs")]
     IndexAs,            // indexAs
@@ -45,23 +45,18 @@ pub enum Token {
     Unsafe,             // unsafe
 
     #[regex(r"[[:alpha:]]+", |lex| lex.slice().to_string())]
-    Name(String),
-    TagName(String),
-    AttrName(String),
-    VariableName(String),
+    RawBlock(String),
 
-    Args(String),
-    Logic(String),
+    #[regex(r"</[[:alpha:]]+>", |lex| lex.slice()[2..lex.slice().len()-1].to_string())]
     CloseTag(String),
-    UnsafeJs(String),
-    UnsafeMarkup(String),
+
+    #[regex(r"@[[:alpha:]]+", |lex| lex.slice().to_string())]
     Event(String),
 
     #[regex(r"[[:digit:]]+", |lex| lex.slice().to_string())]
     ValueNumber(String),
     #[regex(r#""[^"]*""#, |lex| lex.slice().to_string())]
     ValueString(String),
-    ValueSimpleVariable(String),
 
     #[token("{{")]
     OpenExpr,   // {{

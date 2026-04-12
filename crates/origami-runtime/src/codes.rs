@@ -7,30 +7,40 @@
 //!
 //! # Code ranges
 //!
-//! | Range        | Stage    | Description                       |
-//! |--------------|----------|-----------------------------------|
-//! | `L001–L002`  | Lexer    | Tokenisation errors               |
-//! | `P001–P003`  | Parser   | Structural / grammar errors       |
-//! | `ORI101–107` | Analyzer | Semantic / design-system errors   |
-//! | `W001–W002`  | Analyzer | Non-blocking unsafe-usage warnings|
-
-// ---------------------------------------------------------------------------
-// Lexer codes
-// ---------------------------------------------------------------------------
+//! | Range        | Stage        | Description                       |
+//! |--------------|--------------|-----------------------------------|
+//! | `PP00X`      | Preprocessor | Preprocessing errors              |
+//! | `L00X`       | Lexer        | Tokenisation errors               |
+//! | `P00X`       | Parser       | Structural / grammar errors       |
+//! | `ORI10X`     | Analyzer     | Semantic / design-system errors   |
+//! | `W00X`       | Analyzer     | Non-blocking unsafe-usage warnings|
 
 pub struct ErrorCode {
   pub code: &'static str,
   pub message: &'static str
 }
 
-pub const L001: ErrorCode = ErrorCode {
-  code: "L001",
+// ---------------------------------------------------------------------------
+// Preprocessor codes
+// ---------------------------------------------------------------------------
+
+pub const PP001: ErrorCode = ErrorCode {
+  code: "PP001",
   message: "Missing `----` separator between the logic block and the template"
 };
 
-pub const L002: ErrorCode = ErrorCode {
-  code: "L002",
-  message: "Unexpected / unrecognised character in the template or inside a tag."
+pub const PP002: ErrorCode = ErrorCode {
+  code: "PP002",
+  message: "Symbol `----` needs its own line"
+};
+
+// ---------------------------------------------------------------------------
+// Lexer codes
+// ---------------------------------------------------------------------------
+
+pub const L001: ErrorCode = ErrorCode {
+  code: "L001",
+  message: "Unexpected/unrecognised character in the template or inside a tag."
 };
 
 // ---------------------------------------------------------------------------
@@ -95,10 +105,13 @@ pub const ORI107: ErrorCode = ErrorCode {
 // Analyzer warning codes
 // ---------------------------------------------------------------------------
 
-/// Well-formed `<unsafe reason="...">` block — compilation proceeds, but the
-/// escape hatch is flagged for visibility.
-pub const W001: &str = "W001";
 
-/// Well-formed `unsafe('value', 'reason')` prop value — compilation proceeds,
-/// but the bypass is flagged for visibility.
-pub const W002: &str = "W002";
+pub const W001: ErrorCode = ErrorCode {
+  code: "W001",
+  message: "Well-formed `<unsafe reason=\"...\">` block — compilation proceeds, but the escape hatch is flagged for visibility"
+};
+
+pub const W002: ErrorCode = ErrorCode {
+  code: "W002",
+  message: "Well-formed `unsafe('value', 'reason')` prop value — compilation proceeds, but the escape hatch is flagged for visibility"
+};

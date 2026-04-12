@@ -1,11 +1,42 @@
+use std::sync::Arc;
+
+use miette::{Diagnostic, NamedSource, SourceSpan};
 use thiserror::Error;
-use crate::Position;
 
-#[derive(Debug, Error)]
+#[derive(Debug, PartialEq, Error, Diagnostic)]
 pub enum LexError {
-  #[error("[{code}] {message} at {pos}")]
-  UnexpectedChar { code: &'static str, message: String, pos: Position },
+  #[error("[{code}] {message}")]
+  UnexpectedChar { 
+      code: &'static str, 
+      message: &'static str, 
+      span: SourceSpan,
+      src: NamedSource<Arc<String>>
+    },
 
-  #[error("[{code}] {message} at {pos}")]
-  UnterminatedString { code: &'static str, message: String, pos: Position },
+  #[error("[{code}] {message}")]
+  UnterminatedString { 
+    code: &'static str, 
+    message: &'static str,
+    span: SourceSpan,
+    src: NamedSource<Arc<String>>
+  },
+}
+
+#[derive(Debug, PartialEq, Error, Diagnostic)]
+pub enum PreprocessorError {
+  #[error("[{code}] {message}")]
+  SymbolNotFound { 
+      code: &'static str, 
+      message: &'static str, 
+      span: SourceSpan,
+      src: NamedSource<Arc<String>>
+    },
+
+  #[error("[{code}] {message}")]
+  DisplacedToken { 
+    code: &'static str, 
+    message: &'static str,
+    span: SourceSpan,
+    src: NamedSource<Arc<String>>
+  },
 }

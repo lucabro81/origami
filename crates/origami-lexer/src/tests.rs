@@ -1,9 +1,57 @@
 use std::sync::Arc;
 
 use miette::NamedSource;
-use origami_runtime::{Token, codes, errors::PreprocessorError};
+use origami_runtime::{Token, codes, errors::{PreprocessorError, LexError}};
 
-use crate::{lex, preprocess};
+use crate::{correct_span, lex, preprocess};
+
+// correct_span
+
+#[test]
+fn correct_span_empty_offset_map() {
+    // "component Foo {\n----\n}" — no substitutions, span passes through unchanged
+    assert_eq!(correct_span(10..15, &[]), 10..15);
+}
+
+#[test]
+fn correct_span_positive_delta_before_span() {
+    // "component Foo {\nconst x = 1;\n----\n}" — logic block replaced with __LOGIC__
+    // offset_map = [(16, +4)]: original "const x = 1;\n" (14 bytes) → "__LOGIC__\n" (10 bytes), delta = +4
+    // A span at sanitized offset 26 (the `----`) maps to 26 + 4 = 30 in original
+    assert_eq!(correct_span(26..30, &[(16, 4)]), 30..34);
+}
+
+#[test]
+fn correct_span_negative_delta_before_span() {
+    // "...<unsafe reason="test reason"></unsafe>..." — empty unsafe content replaced with __UNSAFE__ (10 bytes)
+    // offset_map = [(79, -10)]: content was 0 bytes, placeholder 10 bytes, delta = -10
+    // logos raw span 100..101 on the `/` of `</Column` in sanitized → 100 + (-10) = 90...
+    // but with both deltas in the real test: see correct_span_two_deltas_lexer_case below
+    assert_eq!(correct_span(99..100, &[(79, -10)]), 89..90);
+}
+
+#[test]
+fn correct_span_delta_after_span_is_ignored() {
+    // Delta at pos 79 does not affect a span at pos 50 (before the substitution)
+    assert_eq!(correct_span(50..51, &[(79, -10)]), 50..51);
+}
+
+#[test]
+fn correct_span_two_deltas_lexer_case() {
+    // "component TestComponent {\nconst test = 13;}\n----\n<Column>\n<unsafe reason="test reason"></unsafe>\n</Column\n}"
+    // offset_map = [(26, +9), (79, -10)]
+    // logos raw span on `/` of `</Column` in sanitized: 100..101
+    // delta_sum = +9 + (-10) = -1 → 99..100 in original
+    // original[99] = '/' of `</Column`
+    assert_eq!(correct_span(100..101, &[(26, 9), (79, -10)]), 99..100);
+}
+
+#[test]
+fn correct_span_delta_exactly_at_span_start() {
+    // Delta pos == span.start: the filter uses `<=` so the delta must be applied
+    // offset_map = [(50, +5)], span = 50..51 → 55..56
+    assert_eq!(correct_span(50..51, &[(50, 5)]), 55..56);
+}
 
 // Preprocess
 
@@ -125,6 +173,25 @@ fn preprocess_displaced_token_inline_before_template() {
     );
 }
 
+#[test]
+fn preprocess_two_logic_blocks() {
+    // Two components in the same file → two separate logic blocks collected in order
+    let input = "component Foo {\nconst x = 1;\n----\n<Col/>\n}\ncomponent Bar {\nconst y = 2;\n----\n<Row/>\n}";
+    let result = preprocess(input, "<test>").unwrap();
+    assert_eq!(result.logic_blocks, vec!["const x = 1;\n", "const y = 2;\n"]);
+    assert_eq!(result.sanitized, "component Foo {\n__LOGIC__\n----\n<Col/>\n}\ncomponent Bar {\n__LOGIC__\n----\n<Row/>\n}");
+}
+
+#[test]
+fn preprocess_unsafe_inside_logic_block_is_not_substituted() {
+    // `<unsafe>` appearing inside a logic block is captured verbatim as logic content —
+    // the preprocessor replaces the whole logic block with __LOGIC__ before it can see the unsafe tag
+    let input = "component Foo {\nconst x = <unsafe reason=\"xss\">bad</unsafe>;\n----\n<Col/>\n}";
+    let result = preprocess(input, "<test>").unwrap();
+    assert_eq!(result.logic_blocks, vec!["const x = <unsafe reason=\"xss\">bad</unsafe>;\n"]);
+    assert_eq!(result.sanitized, "component Foo {\n__LOGIC__\n----\n<Col/>\n}");
+}
+
 // Lexer
 
 #[test]
@@ -165,4 +232,155 @@ fn minimal_file_with_logic_block() {
         Token::CloseBody,
         Token::Eof,
     ]);
+}
+
+#[test]
+fn minimal_file_with_logic_block_and_unsafe_block() {
+    let preprocessed = crate::PreprocessResult {
+        sanitized: "component TestComponent {\n__LOGIC__\n----\n<Column>\n__UNSAFE__\n</Column>\n}".to_string(),
+        logic_blocks: vec!["const test = 13;\n".to_string()],
+        offset_map: vec![],
+        src: NamedSource::new("<test>", Arc::new(String::new())),
+    };
+    let tokens = lex(preprocessed).expect("lexer should not fail on valid input");
+    assert_eq!(tokens, vec![
+        Token::KwComponent, Token::RawBlock(String::from("TestComponent")), Token::OpenBody,
+        Token::LogicBlock(String::from("const test = 13;\n")),
+        Token::Divider,
+        Token::StartTag, Token::RawBlock(String::from("Column")), Token::EndTag,
+        Token::UnsafeBlock(String::from("")),
+        Token::CloseTag(String::from("Column")),
+        Token::CloseBody,
+        Token::Eof,
+    ]);
+}
+
+#[test]
+fn two_components_correct_tokens_and_logic_blocks() {
+    // Full pipeline: two components, each with a logic block
+    let input = "component Foo {\nconst x = 1;\n----\n<Col/>\n}\ncomponent Bar {\nconst y = 2;\n----\n<Row/>\n}";
+    let tokens = lex(preprocess(input, "<test>").unwrap()).unwrap();
+    assert_eq!(tokens, vec![
+        Token::KwComponent, Token::RawBlock(String::from("Foo")), Token::OpenBody,
+        Token::LogicBlock(String::from("const x = 1;\n")),
+        Token::Divider,
+        Token::StartTag, Token::RawBlock(String::from("Col")), Token::EndAutoclosingTag,
+        Token::CloseBody,
+        Token::KwComponent, Token::RawBlock(String::from("Bar")), Token::OpenBody,
+        Token::LogicBlock(String::from("const y = 2;\n")),
+        Token::Divider,
+        Token::StartTag, Token::RawBlock(String::from("Row")), Token::EndAutoclosingTag,
+        Token::CloseBody,
+        Token::Eof,
+    ]);
+}
+
+#[test]
+fn two_components_error_in_second_has_correct_span() {
+    // Error in second component — offset_map from first substitution must still apply
+    // First logic block "const x = 1;\n" (13 bytes) → "__LOGIC__\n" (10 bytes), delta = +4 at pos 16
+    // `@` is invalid; in sanitized it appears after both components' headers
+    // "component Foo {\n__LOGIC__\n----\n<Col/>\n}\ncomponent Bar {\n__LOGIC__\n----\n@\n}"
+    //  offset of `@` in sanitized: let's get it from the real output
+    let input = "component Foo {\nconst x = 1;\n----\n<Col/>\n}\ncomponent Bar {\nconst y = 2;\n----\n@\n}";
+    let preprocessed = preprocess(input, "<test>").unwrap();
+    let result = lex(preprocessed);
+    // The `@` token is an Event only when followed by alpha chars; bare `@\n` is unexpected
+    // We just verify the error code and that the span falls inside the second component
+    if let Err(LexError::UnexpectedChar { code, span, .. }) = result {
+        assert_eq!(code, codes::L001.code);
+        // `@` must be past the end of first component in the original
+        let offset: usize = span.offset().into();
+        assert!(offset > input.find('}').unwrap(), "span should be in second component");
+    } else {
+        panic!("expected UnexpectedChar error");
+    }
+}
+
+#[test]
+fn unsafe_block_with_reason_attr() {
+    // `<unsafe reason="xss">` is tokenised correctly including the reason attribute
+    let preprocessed = crate::PreprocessResult {
+        sanitized: "component Foo {\n----\n<unsafe reason=\"xss\">__UNSAFE__</unsafe>\n}".to_string(),
+        logic_blocks: vec![],
+        offset_map: vec![],
+        src: NamedSource::new("<test>", Arc::new(String::new())),
+    };
+    let tokens = lex(preprocessed).unwrap();
+    assert_eq!(tokens, vec![
+        Token::KwComponent, Token::RawBlock(String::from("Foo")), Token::OpenBody,
+        Token::Divider,
+        Token::OpenUnsafe, Token::Reason, Token::AttrAssign, Token::ValueString(String::from("\"xss\"")),
+        Token::EndTag,
+        Token::UnsafeBlock(String::from("")),
+        Token::CloseTag(String::from("unsafe")),
+        Token::CloseBody,
+        Token::Eof,
+    ]);
+}
+
+#[test]
+fn nested_tags() {
+    // Template with nested tags produces correct token sequence
+    let preprocessed = crate::PreprocessResult {
+        sanitized: "component Foo {\n----\n<Col>\n<Row/>\n</Col>\n}".to_string(),
+        logic_blocks: vec![],
+        offset_map: vec![],
+        src: NamedSource::new("<test>", Arc::new(String::new())),
+    };
+    let tokens = lex(preprocessed).unwrap();
+    assert_eq!(tokens, vec![
+        Token::KwComponent, Token::RawBlock(String::from("Foo")), Token::OpenBody,
+        Token::Divider,
+        Token::StartTag, Token::RawBlock(String::from("Col")), Token::EndTag,
+        Token::StartTag, Token::RawBlock(String::from("Row")), Token::EndAutoclosingTag,
+        Token::CloseTag(String::from("Col")),
+        Token::CloseBody,
+        Token::Eof,
+    ]);
+}
+
+#[test]
+fn unsafe_as_prop_value() {
+    // `unsafe('value', 'reason')` used as a prop value on a component
+    let preprocessed = crate::PreprocessResult {
+        sanitized: "component Foo {\n----\n<Col color=unsafe(\"red\", \"design exception\")/>}".to_string(),
+        logic_blocks: vec![],
+        offset_map: vec![],
+        src: NamedSource::new("<test>", Arc::new(String::new())),
+    };
+    let tokens = lex(preprocessed).unwrap();
+    assert_eq!(tokens, vec![
+        Token::KwComponent, Token::RawBlock(String::from("Foo")), Token::OpenBody,
+        Token::Divider,
+        Token::StartTag, Token::RawBlock(String::from("Col")),
+        Token::RawBlock(String::from("color")), Token::AttrAssign,
+        Token::Unsafe, Token::OpenArgs,
+        Token::ValueString(String::from("\"red\"")),
+        Token::CommaSeparator,
+        Token::ValueString(String::from("\"design exception\"")),
+        Token::CloseArgs,
+        Token::EndAutoclosingTag,
+        Token::CloseBody,
+        Token::Eof,
+    ]);
+}
+
+#[test]
+fn lexer_unexpected_char() {
+    // `</Column` without closing `>` — logos tokenises `<` as StartTag then fails on `/`
+    // logos raw span: 100..101 in sanitized; correct_span applies delta -1 → 99..100 in original
+    let original_input = "component TestComponent {\nconst test = 13;}\n----\n<Column>\n<unsafe reason=\"test reason\"></unsafe>\n</Column\n}";
+    let preprocessed = preprocess(original_input, "<test>").unwrap();
+    let src = preprocessed.src.clone();
+    let tokens = lex(preprocessed);
+    assert_eq!(
+        tokens,
+        Err(LexError::UnexpectedChar {
+            code: codes::L001.code,
+            message: codes::L001.message,
+            span: (99usize, 1usize).into(),
+            src
+        })
+    )
 }

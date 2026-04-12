@@ -32,20 +32,20 @@ pub enum Token {
     OpenUnsafe,         // <unsafe
 
     #[token("condition")]
-    IfCondition,        // condition
+    IfCondition,        
     #[token("collection")]
-    EachCollection,     // collection
+    EachCollection,     
     #[token("indexAs")]
-    IndexAs,            // indexAs
+    IndexAs,            
     #[token("as")]
-    As,                 // as
+    As,                 
     #[token("reason")]
-    Reason,             // reason
+    Reason,             
     #[token("unsafe")]
-    Unsafe,             // unsafe
+    Unsafe,             
 
     #[regex(r"[[:alpha:]]+", |lex| lex.slice().to_string())]
-    RawBlock(String),
+    RawBlock(String), // <--
 
     #[regex(r"</[[:alpha:]]+>", |lex| lex.slice()[2..lex.slice().len()-1].to_string())]
     CloseTag(String),
@@ -78,6 +78,13 @@ pub enum Token {
 
     #[token("=")]
     AttrAssign,         // =
+
+    /// Raw JS/TS content between `{` and `----`. Payload filled after lexing.
+    #[token("__LOGIC__", |_| String::new())]
+    LogicBlock(String),
+    /// Raw content inside `<unsafe>...</unsafe>`. Payload unused.
+    #[token("__UNSAFE__", |_| String::new())]
+    UnsafeBlock(String),
 
     Eof,
 }

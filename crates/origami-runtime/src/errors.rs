@@ -12,14 +12,6 @@ pub enum LexError {
       span: SourceSpan,
       src: NamedSource<Arc<String>>
     },
-
-  #[error("[{code}] {message}")]
-  UnterminatedString { 
-    code: &'static str, 
-    message: &'static str,
-    span: SourceSpan,
-    src: NamedSource<Arc<String>>
-  },
 }
 
 #[derive(Debug, PartialEq, Error, Diagnostic)]

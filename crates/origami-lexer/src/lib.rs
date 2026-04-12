@@ -31,7 +31,7 @@ fn skip_newline(bytes: &[u8], from: usize) -> usize {
 }
 
 /// Corrects a span from the sanitized string back to the original source.
-fn correct_span(span: std::ops::Range<usize>, offset_map: &[(usize, i64)]) -> std::ops::Range<usize> {
+pub(crate) fn correct_span(span: std::ops::Range<usize>, offset_map: &[(usize, i64)]) -> std::ops::Range<usize> {
     let delta: i64 = offset_map.iter()
         .filter(|(pos, _)| *pos <= span.start)
         .map(|(_, d)| d)

@@ -36,9 +36,16 @@ Do not load two block docs at the same time unless one is a direct dependency of
 
 ---
 
-## Parser refactor
+## Compiler pipeline — current state
 
-`grammar.y` (workspace root) is the formal Bison grammar for the Origami template language. It is the reference for the upcoming lexer/parser refactor. The refactor will be substantial — the Clutter pipeline is the current implementation but will likely not be kept in full. Consult memory for details.
+`grammar.y` (workspace root) is the formal Bison grammar for the Origami template language. It is the source of truth for the parser.
+
+**Lexer ✓ complete** (`origami-lexer`):
+- `preprocess(input, filename) → Result<PreprocessResult, PreprocessorError>`: replaces opaque zones with `__LOGIC__` / `__UNSAFE__` placeholders, validates `----` position.
+- `lex(preprocessed) → Result<Vec<Token>, LexError>`: logos-based tokeniser, rehydrates `LogicBlock` tokens, corrects spans via `offset_map`.
+- Key token decisions: `RawBlock(String)` for all identifiers (disambiguation is the parser's job), `KwComponent`/`KwPage`/`KwLayout` as unit variants, `CloseTag(String)` carries tag name only.
+
+**Parser — next** (`origami-parser`, `chumsky` v0.9): `Vec<Token> → AST`. Start with TDD. Consult memory for locked AST decisions (structured `Expr` tree, etc.).
 
 ---
 

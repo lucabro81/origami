@@ -9,6 +9,7 @@ A fullstack opinionated framework with a closed-vocabulary DSL (`.ori` files) th
 - [What is Origami](#what-is-origami)
 - [Status](#status)
 - [Getting started](#getting-started)
+- [Crates](#crates)
 - [Development](#development)
 - [Versioning](#versioning)
 
@@ -34,6 +35,12 @@ Early development. Not usable yet.
 ## Getting started
 
 > Not ready for use. This section will be filled in once the framework is usable.
+
+## Crates
+
+| Crate | README | Role |
+|-------|--------|------|
+| `origami-lexer` | [crates/origami-lexer](crates/origami-lexer/README.md) | `.ori` source → `Vec<Token>` |
 
 ## Development
 

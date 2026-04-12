@@ -626,6 +626,8 @@ dependencies = [
 name = "origami-lexer"
 version = "0.1.0"
 dependencies = [
+ "logos",
+ "miette",
  "origami-runtime",
 ]
 
@@ -650,6 +652,7 @@ name = "origami-runtime"
 version = "0.1.0"
 dependencies = [
  "logos",
+ "miette",
  "serde",
  "serde_json",
  "thiserror",

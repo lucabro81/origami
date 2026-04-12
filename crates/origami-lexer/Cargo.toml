@@ -6,3 +6,5 @@ rust-version.workspace = true
 
 [dependencies]
 origami-runtime.workspace = true
+logos = { workspace = true}
+miette = { workspace = true }

@@ -57,6 +57,13 @@ pub fn preprocess(input: &str, filename: &str) -> Result<PreprocessResult, Prepr
     while i < len {
         // Look for logic block: `{` followed by a newline, then content, then `----` on its own line.
         // Pattern: `{\n<content>\n----\n`
+        // `{{` is an expression delimiter — skip both chars, the lexer handles them.
+        if bytes[i] == b'{' && i + 1 < len && bytes[i + 1] == b'{' {
+            sanitized.push_str("{{");
+            i += 2;
+            continue;
+        }
+
         if bytes[i] == b'{' {
             let after_brace = i + 1;
             let content_start = skip_newline(bytes, after_brace);

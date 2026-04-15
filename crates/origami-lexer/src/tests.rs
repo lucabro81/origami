@@ -192,7 +192,67 @@ fn preprocess_unsafe_inside_logic_block_is_not_substituted() {
     assert_eq!(result.sanitized, "component Foo {\n__LOGIC__\n----\n<Col/>\n}");
 }
 
+#[test]
+fn preprocess_double_brace_in_template_not_treated_as_logic_block() {
+    // Regression: `{{` in the template section was incorrectly triggering logic-block detection.
+    // `{{` is always an expression delimiter — the preprocessor must skip it entirely.
+    let input = "component Foo {\nconst x = 1;\n----\n<Col value={{x}}/>\n}";
+    let result = preprocess(input, "<test>").unwrap();
+    assert_eq!(result.logic_blocks, vec!["const x = 1;\n"]);
+    assert_eq!(result.sanitized, "component Foo {\n__LOGIC__\n----\n<Col value={{x}}/>\n}");
+}
+
 // Lexer
+
+#[test]
+fn component_with_single_prop() {
+    // Signature with one prop: `component Card(title: string) { ---- <Box/> }`
+    // Tokens for the prop signature: OpenArgs RawBlock("title") TypeAssign RawBlock("string") CloseArgs
+    let preprocessed = crate::PreprocessResult {
+        sanitized: "component Card(title: string) {\n----\n<Box/>\n}".to_string(),
+        logic_blocks: vec![],
+        offset_map: vec![],
+        src: NamedSource::new("<test>", Arc::new(String::new())),
+    };
+    let tokens = lex(preprocessed).unwrap();
+    assert_eq!(tokens, vec![
+        Token::KwComponent, Token::RawBlock(String::from("Card")),
+        Token::OpenArgs,
+        Token::RawBlock(String::from("title")), Token::TypeAssign, Token::RawBlock(String::from("string")),
+        Token::CloseArgs,
+        Token::OpenBody,
+        Token::Divider,
+        Token::StartTag, Token::RawBlock(String::from("Box")), Token::EndAutoclosingTag,
+        Token::CloseBody,
+        Token::Eof,
+    ]);
+}
+
+#[test]
+fn component_with_multiple_props_and_logic() {
+    // Full pipeline: two props, logic block, template referencing both props via expressions
+    let input = "component BookCard(title: string, author: string) {\nconst label = title;\n----\n<Box>\n<Text value={{label}}/>\n</Box>\n}";
+    let tokens = lex(preprocess(input, "<test>").unwrap()).unwrap();
+    assert_eq!(tokens, vec![
+        Token::KwComponent, Token::RawBlock(String::from("BookCard")),
+        Token::OpenArgs,
+        Token::RawBlock(String::from("title")), Token::TypeAssign, Token::RawBlock(String::from("string")),
+        Token::CommaSeparator,
+        Token::RawBlock(String::from("author")), Token::TypeAssign, Token::RawBlock(String::from("string")),
+        Token::CloseArgs,
+        Token::OpenBody,
+        Token::LogicBlock(String::from("const label = title;\n")),
+        Token::Divider,
+        Token::StartTag, Token::RawBlock(String::from("Box")), Token::EndTag,
+        Token::StartTag, Token::RawBlock(String::from("Text")),
+        Token::RawBlock(String::from("value")), Token::AttrAssign,
+        Token::OpenExpr, Token::RawBlock(String::from("label")), Token::CloseExpr,
+        Token::EndAutoclosingTag,
+        Token::CloseTag(String::from("Box")),
+        Token::CloseBody,
+        Token::Eof,
+    ]);
+}
 
 #[test]
 fn minimal_file() {

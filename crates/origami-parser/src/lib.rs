@@ -1,5 +1,5 @@
 use chumsky::{prelude::*};
-use origami_runtime::{Prop, Token};
+use origami_runtime::{Declaration, Prop, Token};
 
 pub fn prop_parser<'src>() -> impl Parser<'src, &'src [Token], Prop, extra::Err<Rich<'src, Token>>> {
   select! { Token::RawBlock(name) => name }
@@ -14,4 +14,31 @@ pub fn props_parser<'src>() -> impl Parser<'src, &'src [Token], Vec<Prop>,extra:
     .collect::<Vec<Prop>>()
     .delimited_by(just(Token::OpenArgs), just(Token::CloseArgs))
 }
+
+fn layout_def_parser<'src>() -> impl Parser<'src, &'src [Token], Declaration, extra::Err<Rich<'src, Token>>> {
+  just(Token::KwLayout)
+    .ignore_then(select! { Token::RawBlock(name) => name })
+    .map(|name| Declaration::Layout { name })
+}
+
+fn page_def_parser<'src>() -> impl Parser<'src, &'src [Token], Declaration, extra::Err<Rich<'src, Token>>> {
+  just(Token::KwPage)
+    .ignore_then(select! { Token::RawBlock(name) => name })
+    .then(props_parser())
+    .map(|(name, props)| Declaration::Page { name, props })
+}
+
+fn component_def_parser<'src>() -> impl Parser<'src, &'src [Token], Declaration, extra::Err<Rich<'src, Token>>> {
+  just(Token::KwComponent)
+    .ignore_then(select! { Token::RawBlock(name) => name })
+    .then(props_parser())
+    .map(|(name, props)| Declaration::Component { name, props })
+}
+
+pub fn declaration_parser<'src>() -> impl Parser<'src, &'src [Token], Declaration, extra::Err<Rich<'src, Token>>> {
+  layout_def_parser()
+    .or(page_def_parser())
+    .or(component_def_parser())
+}
+
 #[cfg(test)] mod tests;

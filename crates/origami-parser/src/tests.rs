@@ -1,7 +1,7 @@
 use chumsky::Parser;
-use origami_runtime::{Prop, Token};
+use origami_runtime::{Declaration, Prop, Token};
 
-use crate::{prop_parser, props_parser};
+use crate::{declaration_parser, prop_parser, props_parser};
 
 #[test]
 fn parse_prop() {
@@ -85,4 +85,65 @@ fn parse_props_with_parenthesis() {
     Prop { name: String::from("book"), type_str: String::from("BookData") }, 
     Prop { name: String::from("author"), type_str: String::from("AuthorData") }
   ]));
+}
+
+#[test]
+fn parse_component_def() {
+  let tokens = vec![
+    Token::KwComponent, 
+    Token::RawBlock(String::from("Foo")),
+    Token::OpenArgs,
+    Token::RawBlock(String::from("book")), 
+    Token::TypeAssign, 
+    Token::RawBlock(String::from("BookData")),
+    Token::CloseArgs
+  ];
+
+  let result = declaration_parser().parse(&tokens).into_result();
+  assert_eq!(result, Ok(
+      Declaration::Component { 
+        name: String::from("Foo"), 
+        props: vec![
+          Prop { name: String::from("book"), type_str: String::from("BookData")}
+        ] 
+      }
+    ));
+}
+
+#[test]
+fn parse_layout_def() {
+  let tokens = vec![
+    Token::KwLayout, 
+    Token::RawBlock(String::from("Foo")),
+  ];
+
+  let result = declaration_parser().parse(&tokens).into_result();
+  assert_eq!(result, Ok(
+      Declaration::Layout { 
+        name: String::from("Foo"), 
+      }
+    ));
+}
+
+#[test]
+fn parse_page_def() {
+  let tokens = vec![
+    Token::KwPage, 
+    Token::RawBlock(String::from("Foo")),
+    Token::OpenArgs,
+    Token::RawBlock(String::from("book")), 
+    Token::TypeAssign, 
+    Token::RawBlock(String::from("BookData")),
+    Token::CloseArgs
+  ];
+
+  let result = declaration_parser().parse(&tokens).into_result();
+  assert_eq!(result, Ok(
+      Declaration::Page { 
+        name: String::from("Foo"), 
+        props: vec![
+          Prop { name: String::from("book"), type_str: String::from("BookData")}
+        ] 
+      }
+    ));
 }

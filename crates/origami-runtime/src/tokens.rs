@@ -78,6 +78,8 @@ pub enum Token {
 
     #[token("=")]
     AttrAssign,         // =
+    #[token(":")]
+    TypeAssign,         // :
 
     /// Raw JS/TS content between `{` and `----`. Payload filled after lexing.
     #[token("__LOGIC__", |_| String::new())]

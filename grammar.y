@@ -3,7 +3,6 @@
 
 %token DIVIDER "----"
 %token NAME
-%token ARGS
 %token LOGIC
 
 %token START_TAG "<"
@@ -51,6 +50,7 @@
 %token PERIOD_SEPARATOR "."
 
 %token ATTR_ASSIGN "="
+%token TYPE_ASSIGN ":"
 
 %%
 
@@ -64,8 +64,17 @@ component:
   ;
 
 header:
-    COMPONENT NAME OPEN_ARGS ARGS CLOSE_ARGS
+    COMPONENT NAME OPEN_ARGS props CLOSE_ARGS
   | COMPONENT NAME
+  ;
+
+props:
+    prop
+  | props COMMA_SEPARATOR prop
+  ;
+
+prop:
+    NAME TYPE_ASSIGN NAME
   ;
 
 template:

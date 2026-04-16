@@ -13,5 +13,5 @@ pub enum Declaration {
 
 #[derive(Debug, PartialEq)]
 pub struct OriFile { 
-    declarations: Vec<Declaration> 
+    pub declarations: Vec<Declaration> 
 }

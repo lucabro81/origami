@@ -1,5 +1,5 @@
 use chumsky::{prelude::*};
-use origami_runtime::{Declaration, Prop, Token};
+use origami_runtime::{Declaration, OriFile, Prop, Token};
 
 pub fn prop_parser<'src>() -> impl Parser<'src, &'src [Token], Prop, extra::Err<Rich<'src, Token>>> {
   select! { Token::RawBlock(name) => name }
@@ -39,6 +39,14 @@ pub fn declaration_parser<'src>() -> impl Parser<'src, &'src [Token], Declaratio
   layout_def_parser()
     .or(page_def_parser())
     .or(component_def_parser())
+}
+
+pub fn ori_file_parser<'src>() -> impl  Parser<'src, &'src [Token], OriFile, extra::Err<Rich<'src, Token>>> {
+  declaration_parser()
+    .repeated()
+    .collect::<Vec<Declaration>>()
+    .map(|declarations| OriFile { declarations })
+    .then_ignore(just(Token::Eof))
 }
 
 #[cfg(test)] mod tests;

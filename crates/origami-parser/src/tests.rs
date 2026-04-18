@@ -1,7 +1,7 @@
 use chumsky::Parser;
-use origami_runtime::{Declaration, Prop, Token};
+use origami_runtime::{Declaration, OriFile, Prop, Token};
 
-use crate::{declaration_parser, prop_parser, props_parser};
+use crate::{declaration_parser, ori_file_parser, prop_parser, props_parser};
 
 #[test]
 fn parse_prop() {
@@ -31,14 +31,14 @@ fn parse_prop_missing_type() {
     ];
     assert!(prop_parser().parse(&tokens).into_result().is_err());
 }
-
+ 
 #[test]
 fn parse_prop_mistokened_name() {
     let tokens = vec![
       Token::TypeAssign, 
       Token::TypeAssign, 
       Token::RawBlock(String::from("BookData"))
-    ];
+    ];      
     assert!(prop_parser().parse(&tokens).into_result().is_err());
 }
 
@@ -139,11 +139,41 @@ fn parse_page_def() {
 
   let result = declaration_parser().parse(&tokens).into_result();
   assert_eq!(result, Ok(
-      Declaration::Page { 
-        name: String::from("Foo"), 
-        props: vec![
-          Prop { name: String::from("book"), type_str: String::from("BookData")}
-        ] 
-      }
-    ));
+    Declaration::Page { 
+      name: String::from("Foo"), 
+      props: vec![
+        Prop { name: String::from("book"), type_str: String::from("BookData")}
+      ] 
+    }
+  ));
+}
+
+#[test]
+fn parse_ori_file() {
+  let tokens = [
+    Token::KwComponent, 
+    Token::RawBlock(String::from("Foo")),
+    Token::OpenArgs,
+      Token::RawBlock(String::from("book")), Token::TypeAssign, Token::RawBlock(String::from("BookData")),
+      Token::CommaSeparator,
+      Token::RawBlock(String::from("author")), Token::TypeAssign, Token::RawBlock(String::from("AuthorData")),
+    Token::CloseArgs,
+    Token::Eof,
+  ];
+
+  let result = ori_file_parser().parse(&tokens).into_result();
+
+  assert_eq!(result, Ok(
+    OriFile {
+      declarations: vec![
+        Declaration::Component { 
+          name: String::from("Foo"), 
+          props: vec![
+            Prop { name: String::from("book"), type_str: String::from("BookData")},
+            Prop { name: String::from("author"), type_str: String::from("AuthorData")}
+          ] 
+        }
+      ]
+    }
+  ));
 }

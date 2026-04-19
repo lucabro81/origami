@@ -21,7 +21,7 @@ pub enum SimpleExpression {
 pub enum Static {
     NumberInt(i64),
     NumberFloat(f64),
-    Literal(String),
+    String(String),
 }
 
 #[derive(Debug, Clone, PartialEq)]

@@ -1,10 +1,10 @@
 use chumsky::{prelude::*};
-use origami_runtime::{Body, ComponentNode, Declaration, Node, OriFile, Prop, Token};
+use origami_runtime::{Attr, AttrValue, Body, ComponentNode, Declaration, Node, OriFile, Prop, Static, Token};
 
 pub fn prop_parser<'src>() -> impl Parser<'src, &'src [Token], Prop, extra::Err<Rich<'src, Token>>> {
   select! { Token::RawBlock(name) => name }
     .then_ignore(just(Token::TypeAssign))
-    .then(select! { Token::RawBlock(name) => name })
+    .then(select! { Token::RawBlock(type_str) => type_str })
     .map(|(name, type_str)| Prop { name, type_str })
 }
 
@@ -13,6 +13,43 @@ pub fn props_parser<'src>() -> impl Parser<'src, &'src [Token], Vec<Prop>,extra:
     .separated_by(just(Token::CommaSeparator))
     .collect::<Vec<Prop>>()
     .delimited_by(just(Token::OpenArgs), just(Token::CloseArgs))
+}
+
+pub fn attr_static_string_value_parser<'src>() -> impl Parser<'src, &'src [Token], Static, extra::Err<Rich<'src, Token>>> {
+  select! { Token::ValueString(value) => value }
+    .map(|value| Static::String(value))
+}
+
+pub fn attr_static_int_value_parser<'src>() -> impl Parser<'src, &'src [Token], Static, extra::Err<Rich<'src, Token>>> {
+  select! { Token::ValueNumber(value) => value }
+    .map(|value| Static::NumberInt(value.parse().unwrap()))
+}
+
+pub fn attr_static_float_value_parser<'src>() -> impl Parser<'src, &'src [Token], Static, extra::Err<Rich<'src, Token>>> {
+  select! { Token::ValueString(value) => value }
+    .map(|value| Static::String(value.parse().unwrap()))
+}
+
+pub fn attr_static_value_parser<'src>() -> impl Parser<'src, &'src [Token], Static, extra::Err<Rich<'src, Token>>> {
+  attr_static_string_value_parser()
+    .or(attr_static_int_value_parser())
+    .or(attr_static_float_value_parser())
+}
+
+pub fn attr_literal_value_parser<'src>() -> impl Parser<'src, &'src [Token], AttrValue, extra::Err<Rich<'src, Token>>> {
+  attr_static_value_parser()
+    .map(|value| AttrValue::Literal(value))
+}
+
+pub fn attr_value_parser<'src>() -> impl Parser<'src, &'src [Token], AttrValue, extra::Err<Rich<'src, Token>>> {
+  attr_literal_value_parser()
+}
+
+pub fn attr_parser<'src>() -> impl Parser<'src, &'src [Token], Attr, extra::Err<Rich<'src, Token>>> {
+  select! { Token::RawBlock(name) => name }
+    .then_ignore(just(Token::AttrAssign))
+    .then(select! { Token::RawBlock(value) => value })
+    .map(|(name, value)| Attr { name, value })
 }
 
 pub fn simple_autoclosing_tag_parser<'src>() -> impl Parser<'src, &'src [Token], Node, extra:: Err<Rich<'src, Token>>> {

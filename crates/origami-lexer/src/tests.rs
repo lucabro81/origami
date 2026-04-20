@@ -207,7 +207,7 @@ fn preprocess_double_brace_in_template_not_treated_as_logic_block() {
 #[test]
 fn component_with_single_prop() {
     // Signature with one prop: `component Card(title: string) { ---- <Box/> }`
-    // Tokens for the prop signature: OpenArgs RawBlock("title") TypeAssign RawBlock("string") CloseArgs
+    // Tokens for the prop signature: OpenArgs Ident("title") TypeAssign Ident("string") CloseArgs
     let preprocessed = crate::PreprocessResult {
         sanitized: "component Card(title: string) {\n----\n<Box/>\n}".to_string(),
         logic_blocks: vec![],
@@ -216,13 +216,13 @@ fn component_with_single_prop() {
     };
     let tokens = lex(preprocessed).unwrap();
     assert_eq!(tokens, vec![
-        Token::KwComponent, Token::RawBlock(String::from("Card")),
+        Token::KwComponent, Token::Ident(String::from("Card")),
         Token::OpenArgs,
-        Token::RawBlock(String::from("title")), Token::TypeAssign, Token::RawBlock(String::from("string")),
+        Token::Ident(String::from("title")), Token::TypeAssign, Token::Ident(String::from("string")),
         Token::CloseArgs,
         Token::OpenBody,
         Token::Divider,
-        Token::StartTag, Token::RawBlock(String::from("Box")), Token::EndAutoclosingTag,
+        Token::StartTag, Token::Ident(String::from("Box")), Token::EndAutoclosingTag,
         Token::CloseBody,
         Token::Eof,
     ]);
@@ -234,19 +234,19 @@ fn component_with_multiple_props_and_logic() {
     let input = "component BookCard(title: string, author: string) {\nconst label = title;\n----\n<Box>\n<Text value={{label}}/>\n</Box>\n}";
     let tokens = lex(preprocess(input, "<test>").unwrap()).unwrap();
     assert_eq!(tokens, vec![
-        Token::KwComponent, Token::RawBlock(String::from("BookCard")),
+        Token::KwComponent, Token::Ident(String::from("BookCard")),
         Token::OpenArgs,
-        Token::RawBlock(String::from("title")), Token::TypeAssign, Token::RawBlock(String::from("string")),
+        Token::Ident(String::from("title")), Token::TypeAssign, Token::Ident(String::from("string")),
         Token::CommaSeparator,
-        Token::RawBlock(String::from("author")), Token::TypeAssign, Token::RawBlock(String::from("string")),
+        Token::Ident(String::from("author")), Token::TypeAssign, Token::Ident(String::from("string")),
         Token::CloseArgs,
         Token::OpenBody,
         Token::LogicBlock(String::from("const label = title;\n")),
         Token::Divider,
-        Token::StartTag, Token::RawBlock(String::from("Box")), Token::EndTag,
-        Token::StartTag, Token::RawBlock(String::from("Text")),
-        Token::RawBlock(String::from("value")), Token::AttrAssign,
-        Token::OpenExpr, Token::RawBlock(String::from("label")), Token::CloseExpr,
+        Token::StartTag, Token::Ident(String::from("Box")), Token::EndTag,
+        Token::StartTag, Token::Ident(String::from("Text")),
+        Token::Ident(String::from("value")), Token::AttrAssign,
+        Token::OpenExpr, Token::Ident(String::from("label")), Token::CloseExpr,
         Token::EndAutoclosingTag,
         Token::CloseTag(String::from("Box")),
         Token::CloseBody,
@@ -265,9 +265,58 @@ fn minimal_file() {
     };
     let tokens = lex(preprocessed).expect("lexer should not fail on valid input");
     assert_eq!(tokens, vec![
-        Token::KwComponent, Token::RawBlock(String::from("TestComponent")), Token::OpenBody,
+        Token::KwComponent, Token::Ident(String::from("TestComponent")), Token::OpenBody,
         Token::Divider,
-        Token::StartTag, Token::RawBlock(String::from("Column")), Token::EndTag,
+        Token::StartTag, Token::Ident(String::from("Column")), Token::EndTag,
+        Token::CloseTag(String::from("Column")),
+        Token::CloseBody,
+        Token::Eof,
+    ]);
+}
+
+#[test]
+fn tempalte_with_number_attr() {
+    let sanitized = "component TestComponent {\n----\n<Column col=123></Column>\n}";
+    let preprocessed = crate::PreprocessResult {
+        sanitized: sanitized.to_string(),
+        logic_blocks: vec![],
+        offset_map: vec![],
+        src: NamedSource::new("<test>", Arc::new(sanitized.to_string())),
+    };
+    let tokens = lex(preprocessed).expect("lexer should not fail on valid input");
+    assert_eq!(tokens, vec![
+        Token::KwComponent, Token::Ident(String::from("TestComponent")), Token::OpenBody,
+        Token::Divider,
+        Token::StartTag, 
+            Token::Ident(String::from("Column")), 
+            Token::Ident(String::from("col")), Token::AttrAssign, Token::ValueNumber(String::from("123")),
+        Token::EndTag,
+        Token::CloseTag(String::from("Column")),
+        Token::CloseBody,
+        Token::Eof,
+    ]);
+}
+
+#[test]
+fn tempalte_with_mixed_attr() {
+    let sanitized = "component TestComponent {\n----\n<Column col=123 row=\"test\"></Column>\n}";
+    let preprocessed = crate::PreprocessResult {
+        sanitized: sanitized.to_string(),
+        logic_blocks: vec![],
+        offset_map: vec![],
+        src: NamedSource::new("<test>", Arc::new(sanitized.to_string())),
+    };
+    let tokens = lex(preprocessed).expect("lexer should not fail on valid input");
+    assert_eq!(tokens, vec![
+        Token::KwComponent, Token::Ident(String::from("TestComponent")), Token::OpenBody,
+        Token::Divider,
+        Token::StartTag, 
+            Token::Ident(String::from("Column")), 
+
+            Token::Ident(String::from("col")), Token::AttrAssign, Token::ValueNumber(String::from("123")),
+            
+            Token::Ident(String::from("row")), Token::AttrAssign, Token::ValueString(String::from("\"test\"")),
+        Token::EndTag,
         Token::CloseTag(String::from("Column")),
         Token::CloseBody,
         Token::Eof,
@@ -284,10 +333,10 @@ fn minimal_file_with_logic_block() {
     };
     let tokens = lex(preprocessed).expect("lexer should not fail on valid input");
     assert_eq!(tokens, vec![
-        Token::KwComponent, Token::RawBlock(String::from("TestComponent")), Token::OpenBody,
+        Token::KwComponent, Token::Ident(String::from("TestComponent")), Token::OpenBody,
         Token::LogicBlock(String::from("const test = 13;\n")),
         Token::Divider,
-        Token::StartTag, Token::RawBlock(String::from("Column")), Token::EndTag,
+        Token::StartTag, Token::Ident(String::from("Column")), Token::EndTag,
         Token::CloseTag(String::from("Column")),
         Token::CloseBody,
         Token::Eof,
@@ -304,10 +353,10 @@ fn minimal_file_with_logic_block_and_unsafe_block() {
     };
     let tokens = lex(preprocessed).expect("lexer should not fail on valid input");
     assert_eq!(tokens, vec![
-        Token::KwComponent, Token::RawBlock(String::from("TestComponent")), Token::OpenBody,
+        Token::KwComponent, Token::Ident(String::from("TestComponent")), Token::OpenBody,
         Token::LogicBlock(String::from("const test = 13;\n")),
         Token::Divider,
-        Token::StartTag, Token::RawBlock(String::from("Column")), Token::EndTag,
+        Token::StartTag, Token::Ident(String::from("Column")), Token::EndTag,
         Token::UnsafeBlock(String::from("")),
         Token::CloseTag(String::from("Column")),
         Token::CloseBody,
@@ -321,15 +370,15 @@ fn two_components_correct_tokens_and_logic_blocks() {
     let input = "component Foo {\nconst x = 1;\n----\n<Col/>\n}\ncomponent Bar {\nconst y = 2;\n----\n<Row/>\n}";
     let tokens = lex(preprocess(input, "<test>").unwrap()).unwrap();
     assert_eq!(tokens, vec![
-        Token::KwComponent, Token::RawBlock(String::from("Foo")), Token::OpenBody,
+        Token::KwComponent, Token::Ident(String::from("Foo")), Token::OpenBody,
         Token::LogicBlock(String::from("const x = 1;\n")),
         Token::Divider,
-        Token::StartTag, Token::RawBlock(String::from("Col")), Token::EndAutoclosingTag,
+        Token::StartTag, Token::Ident(String::from("Col")), Token::EndAutoclosingTag,
         Token::CloseBody,
-        Token::KwComponent, Token::RawBlock(String::from("Bar")), Token::OpenBody,
+        Token::KwComponent, Token::Ident(String::from("Bar")), Token::OpenBody,
         Token::LogicBlock(String::from("const y = 2;\n")),
         Token::Divider,
-        Token::StartTag, Token::RawBlock(String::from("Row")), Token::EndAutoclosingTag,
+        Token::StartTag, Token::Ident(String::from("Row")), Token::EndAutoclosingTag,
         Token::CloseBody,
         Token::Eof,
     ]);
@@ -368,7 +417,7 @@ fn unsafe_block_with_reason_attr() {
     };
     let tokens = lex(preprocessed).unwrap();
     assert_eq!(tokens, vec![
-        Token::KwComponent, Token::RawBlock(String::from("Foo")), Token::OpenBody,
+        Token::KwComponent, Token::Ident(String::from("Foo")), Token::OpenBody,
         Token::Divider,
         Token::OpenUnsafe, Token::Reason, Token::AttrAssign, Token::ValueString(String::from("\"xss\"")),
         Token::EndTag,
@@ -390,10 +439,10 @@ fn nested_tags() {
     };
     let tokens = lex(preprocessed).unwrap();
     assert_eq!(tokens, vec![
-        Token::KwComponent, Token::RawBlock(String::from("Foo")), Token::OpenBody,
+        Token::KwComponent, Token::Ident(String::from("Foo")), Token::OpenBody,
         Token::Divider,
-        Token::StartTag, Token::RawBlock(String::from("Col")), Token::EndTag,
-        Token::StartTag, Token::RawBlock(String::from("Row")), Token::EndAutoclosingTag,
+        Token::StartTag, Token::Ident(String::from("Col")), Token::EndTag,
+        Token::StartTag, Token::Ident(String::from("Row")), Token::EndAutoclosingTag,
         Token::CloseTag(String::from("Col")),
         Token::CloseBody,
         Token::Eof,
@@ -411,10 +460,10 @@ fn unsafe_as_prop_value() {
     };
     let tokens = lex(preprocessed).unwrap();
     assert_eq!(tokens, vec![
-        Token::KwComponent, Token::RawBlock(String::from("Foo")), Token::OpenBody,
+        Token::KwComponent, Token::Ident(String::from("Foo")), Token::OpenBody,
         Token::Divider,
-        Token::StartTag, Token::RawBlock(String::from("Col")),
-        Token::RawBlock(String::from("color")), Token::AttrAssign,
+        Token::StartTag, Token::Ident(String::from("Col")),
+        Token::Ident(String::from("color")), Token::AttrAssign,
         Token::Unsafe, Token::OpenArgs,
         Token::ValueString(String::from("\"red\"")),
         Token::CommaSeparator,

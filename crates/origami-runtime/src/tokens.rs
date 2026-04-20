@@ -53,7 +53,7 @@ pub enum Token {
     #[regex(r"@[[:alpha:]]+", |lex| lex.slice().to_string())]
     Event(String),
 
-    #[regex(r"[[:digit:]]+", |lex| lex.slice().to_string())]
+    #[regex(r"[0-9]+\.[0-9]+|[0-9]+", |lex| lex.slice().to_string(), priority = 10)]
     ValueNumber(String),
     #[regex(r#""[^"]*""#, |lex| lex.slice().to_string())]
     ValueString(String),

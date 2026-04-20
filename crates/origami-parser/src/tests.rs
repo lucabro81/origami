@@ -2,8 +2,8 @@ use chumsky::Parser;
 use origami_runtime::{Attr, AttrValue, Body, ComponentNode, Declaration, Node, OriFile, Prop, SimpleExpression, Static, Token};
 
 use crate::{
-  attrs::{attr_parser, attr_simple_expression_dot_value_parser, attr_simple_expression_var_value_parser, attr_static_int_value_parser, attr_static_string_value_parser},
-  body_parser, declaration_parser, ori_file_parser, props::prop_parser, props_parser, simple_autoclosing_tag_parser, simple_tag_parser,
+  attrs::{attr_parser, attr_simple_expression_dot_value_parser, attr_simple_expression_var_value_parser, attr_static_int_value_parser, attr_static_string_value_parser, attr_unsafe_value_parser},
+  body_parser, declaration_parser, ori_file_parser, props::prop_parser, props_parser, autoclosing_node_parser, node_parser,
 };
 
 #[test]
@@ -98,12 +98,94 @@ fn parse_simple_autoclosing_tag() {
     Token::EndAutoclosingTag
   ];
 
-  let result = simple_autoclosing_tag_parser().parse(&tokens).into_result();
+  let result = autoclosing_node_parser().parse(&tokens).into_result();
 
   assert_eq!(result, Ok(
     Node::Component(ComponentNode {
       name: String::from("Box"),
       attrs: vec![],
+      children: vec![]
+    })
+  ));
+
+}
+
+#[test]
+fn parse_autoclosing_tag_with_attrs() {
+  let tokens = vec![
+    Token::StartTag, 
+    Token::Ident(String::from("Box")), 
+
+    Token::Ident(String::from("width")), 
+      Token::AttrAssign,
+      Token::ValueNumber(String::from("123")),
+
+    Token::Ident(String::from("height")), 
+      Token::AttrAssign,
+      Token::ValueNumber(String::from("32.1")),
+
+    Token::Ident(String::from("title")), 
+      Token::AttrAssign,
+      Token::ValueString(String::from("\"Un cavaliere per l'affascinante spia\"")),
+
+    Token::Ident(String::from("author")), 
+      Token::AttrAssign,
+      Token::OpenExpr, 
+            Token::Ident(String::from("book")), 
+            Token::PeriodSeparator, 
+            Token::Ident(String::from("author")), 
+      Token::CloseExpr,
+
+    Token::Ident(String::from("size")), 
+      Token::AttrAssign,
+      Token::OpenExpr, 
+        Token::Unsafe,
+          Token::OpenArgs,
+            Token::ValueNumber(String::from("42")),
+            Token::CommaSeparator,
+          Token::ValueString(String::from("\"needed for legacy API\"")),
+        Token::CloseArgs,
+      Token::CloseExpr,
+
+    Token::EndAutoclosingTag
+  ];
+
+  let result = autoclosing_node_parser().parse(&tokens).into_result();
+
+  assert_eq!(result, Ok(
+    Node::Component(ComponentNode {
+      name: String::from("Box"),
+      attrs: vec![
+        Attr { 
+          name: String::from("width"), 
+          value: AttrValue::Literal(Static::NumberInt(123i64)),
+        },
+        Attr { 
+          name: String::from("height"), 
+          value: AttrValue::Literal(Static::NumberFloat(32.1f64))
+        },
+        Attr { 
+          name: String::from("title"), 
+          value: AttrValue::Literal(Static::String(String::from("\"Un cavaliere per l'affascinante spia\"")))
+        },
+        Attr { 
+          name: String::from("author"), 
+          value: AttrValue::Dynamic(
+            SimpleExpression::Dot(
+              Box::new(SimpleExpression::Var(String::from("book"))), 
+              String::from("author")
+            )
+          ) 
+        },
+        Attr { 
+          name: String::from("size"), 
+          value: AttrValue::UnsafeValue {
+            value: Static::NumberInt(42),
+            reason: String::from("\"needed for legacy API\""),
+          }
+        }
+        
+      ],
       children: vec![]
     })
   ));
@@ -119,7 +201,7 @@ fn parse_simple_tag() {
     Token::CloseTag(String::from("Box"))
   ];
 
-  let result = simple_tag_parser().parse(&tokens).into_result();
+  let result = node_parser().parse(&tokens).into_result();
 
   assert_eq!(result, Ok(
     Node::Component(ComponentNode {
@@ -415,4 +497,96 @@ fn parse_attr_missing_value() {
     Token::AttrAssign,
   ];
   assert!(attr_parser().parse(&tokens).into_result().is_err());
+}
+
+// --- attr_usafe_value_parser ---
+
+#[test]
+fn parse_attr_unsafe_value_int() {
+  let tokens = vec![
+    Token::OpenExpr,
+    Token::Unsafe,
+    Token::OpenArgs,
+    Token::ValueNumber(String::from("42")),
+    Token::CommaSeparator,
+    Token::ValueString(String::from("\"needed for legacy API\"")),
+    Token::CloseArgs,
+    Token::CloseExpr,
+  ];
+  let result = attr_unsafe_value_parser().parse(&tokens).into_result();
+  assert_eq!(result, Ok(AttrValue::UnsafeValue {
+    value: Static::NumberInt(42),
+    reason: String::from("\"needed for legacy API\""),
+  }));
+}
+
+#[test]
+fn parse_attr_unsafe_value_float() {
+  let tokens = vec![
+    Token::OpenExpr,
+    Token::Unsafe,
+    Token::OpenArgs,
+    Token::ValueNumber(String::from("3.14")),
+    Token::CommaSeparator,
+    Token::ValueString(String::from("\"precision required\"")),
+    Token::CloseArgs,
+    Token::CloseExpr,
+  ];
+  let result = attr_unsafe_value_parser().parse(&tokens).into_result();
+  assert_eq!(result, Ok(AttrValue::UnsafeValue {
+    value: Static::NumberFloat(3.14),
+    reason: String::from("\"precision required\""),
+  }));
+}
+
+#[test]
+fn parse_attr_unsafe_value_string() {
+  let tokens = vec![
+    Token::OpenExpr,
+    Token::Unsafe,
+    Token::OpenArgs,
+    Token::ValueString(String::from("\"raw html\"")),
+    Token::CommaSeparator,
+    Token::ValueString(String::from("\"sanitized upstream\"")),
+    Token::CloseArgs,
+    Token::CloseExpr,
+  ];
+  let result = attr_unsafe_value_parser().parse(&tokens).into_result();
+  assert_eq!(result, Ok(AttrValue::UnsafeValue {
+    value: Static::String(String::from("\"raw html\"")),
+    reason: String::from("\"sanitized upstream\""),
+  }));
+}
+
+#[test]
+fn parse_attr_unsafe_value_missing_reason() {
+  // comma and reason are mandatory
+  let tokens = vec![
+    Token::Unsafe,
+    Token::OpenArgs,
+    Token::ValueNumber(String::from("42")),
+  ];
+  assert!(attr_unsafe_value_parser().parse(&tokens).into_result().is_err());
+}
+
+#[test]
+fn parse_attr_unsafe_value_missing_unsafe_keyword() {
+  let tokens = vec![
+    Token::OpenArgs,
+    Token::ValueNumber(String::from("42")),
+    Token::CommaSeparator,
+    Token::ValueString(String::from("\"reason\"")),
+  ];
+  assert!(attr_unsafe_value_parser().parse(&tokens).into_result().is_err());
+}
+
+#[test]
+fn parse_attr_unsafe_value_missing_open_args() {
+  let tokens = vec![
+    Token::Unsafe,
+    Token::ValueNumber(String::from("42")),
+    Token::CommaSeparator,
+    Token::ValueString(String::from("\"reason\"")),
+  ];
+  assert!(attr_unsafe_value_parser().parse(&tokens).into_result().is_err());
 }

@@ -70,9 +70,26 @@ pub fn attr_dynamic_value_parser<'src>() -> impl Parser<'src, &'src [Token], Att
     .map(|value| AttrValue::Dynamic(value))
 }
 
+pub fn attr_unsafe_value_parser<'src>() -> impl Parser<'src, &'src [Token], AttrValue, extra::Err<Rich<'src, Token>>> {
+  just(Token::OpenExpr)
+    .ignore_then(just(Token::Unsafe))
+      .ignore_then(just(Token::OpenArgs))
+      .ignore_then(
+        attr_static_string_value_parser()
+        .or(attr_static_int_value_parser())
+        .or(attr_static_float_value_parser())
+      )
+      .then_ignore(just(Token::CommaSeparator))
+      .then(select! { Token::ValueString(reason) => reason })
+      .map(|(value, reason)| AttrValue::UnsafeValue { value, reason })
+    .then_ignore(just(Token::CloseArgs))
+  .then_ignore(just(Token::CloseExpr))
+}
+
 pub fn attr_value_parser<'src>() -> impl Parser<'src, &'src [Token], AttrValue, extra::Err<Rich<'src, Token>>> {
   attr_literal_value_parser()
-  // TODO: Dynamic(SimpleExpression) UnsafeValue{ value: Static, reason: String }
+    .or(attr_dynamic_value_parser())
+    .or(attr_unsafe_value_parser())
 }
 
 pub fn attr_parser<'src>() -> impl Parser<'src, &'src [Token], Attr, extra::Err<Rich<'src, Token>>> {

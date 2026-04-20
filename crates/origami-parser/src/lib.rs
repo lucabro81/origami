@@ -1,29 +1,39 @@
 pub mod props;
 pub mod attrs;
 
-use crate::props::props_parser;
+use crate::{attrs::attr_parser, props::props_parser};
 
 use chumsky::{prelude::*};
-use origami_runtime::{Body, ComponentNode, Declaration, Node, OriFile, Token};
+use origami_runtime::{Attr, Body, ComponentNode, Declaration, Node, OriFile, Token};
 
-pub fn simple_autoclosing_tag_parser<'src>() -> impl Parser<'src, &'src [Token], Node, extra:: Err<Rich<'src, Token>>> {
+pub fn autoclosing_node_parser<'src>() -> impl Parser<'src, &'src [Token], Node, extra:: Err<Rich<'src, Token>>> {
   just(Token::StartTag)
     .ignore_then(select! { Token::Ident(name) => name })
-    .map(|name| Node::Component(ComponentNode {
+    .then(
+      attr_parser()
+      .repeated()
+      .collect::<Vec<Attr>>()
+    )
+    .map(|(name, attrs)| Node::Component(ComponentNode {
       name,
-      attrs: vec![],
+      attrs,
       children: vec![]
     }))
   .then_ignore(just(Token::EndAutoclosingTag))
 }
 
-pub fn simple_tag_parser<'src>() -> impl Parser<'src, &'src [Token], Node, extra:: Err<Rich<'src, Token>>> {
+pub fn node_parser<'src>() -> impl Parser<'src, &'src [Token], Node, extra:: Err<Rich<'src, Token>>> {
   just(Token::StartTag)
     .ignore_then(select! { Token::Ident(name) => name })
+    .then(
+      attr_parser()
+      .repeated()
+      .collect::<Vec<Attr>>()
+    )
     .then_ignore(just(Token::EndTag))
-    .map(|name| Node::Component(ComponentNode {
+    .map(|(name, attrs)| Node::Component(ComponentNode {
       name,
-      attrs: vec![],
+      attrs,
       children: vec![]
     }))
   .then_ignore(select! { Token::CloseTag(name) => name })

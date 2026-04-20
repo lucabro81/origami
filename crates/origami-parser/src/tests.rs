@@ -1,14 +1,17 @@
 use chumsky::Parser;
-use origami_runtime::{Body, ComponentNode, Declaration, Node, OriFile, Prop, Token};
+use origami_runtime::{Attr, AttrValue, Body, ComponentNode, Declaration, Node, OriFile, Prop, SimpleExpression, Static, Token};
 
-use crate::{body_parser, declaration_parser, ori_file_parser, prop_parser, props_parser, simple_autoclosing_tag_parser, simple_tag_parser};
+use crate::{
+  attrs::{attr_parser, attr_simple_expression_dot_value_parser, attr_simple_expression_var_value_parser, attr_static_int_value_parser, attr_static_string_value_parser},
+  body_parser, declaration_parser, ori_file_parser, props::prop_parser, props_parser, simple_autoclosing_tag_parser, simple_tag_parser,
+};
 
 #[test]
 fn parse_prop() {
   let tokens = vec![
-    Token::RawBlock(String::from("book")), 
+    Token::Ident(String::from("book")), 
     Token::TypeAssign, 
-    Token::RawBlock(String::from("BookData"))
+    Token::Ident(String::from("BookData"))
   ];
   let result = prop_parser().parse(&tokens).into_result();
   assert_eq!(result, Ok(Prop { name: "book".into(), type_str: "BookData".into() }));
@@ -17,8 +20,8 @@ fn parse_prop() {
 #[test]
 fn parse_prop_missing_type_assign() {
     let tokens = vec![
-      Token::RawBlock(String::from("book")),
-      Token::RawBlock(String::from("BookData")),
+      Token::Ident(String::from("book")),
+      Token::Ident(String::from("BookData")),
     ];
     assert!(prop_parser().parse(&tokens).into_result().is_err());
 }
@@ -26,7 +29,7 @@ fn parse_prop_missing_type_assign() {
 #[test]
 fn parse_prop_missing_type() {
     let tokens = vec![
-      Token::RawBlock(String::from("book")),
+      Token::Ident(String::from("book")),
       Token::TypeAssign, 
     ];
     assert!(prop_parser().parse(&tokens).into_result().is_err());
@@ -37,7 +40,7 @@ fn parse_prop_mistokened_name() {
     let tokens = vec![
       Token::TypeAssign, 
       Token::TypeAssign, 
-      Token::RawBlock(String::from("BookData"))
+      Token::Ident(String::from("BookData"))
     ];      
     assert!(prop_parser().parse(&tokens).into_result().is_err());
 }
@@ -45,7 +48,7 @@ fn parse_prop_mistokened_name() {
 #[test]
 fn parse_prop_mistokened_type() {
     let tokens = vec![
-      Token::RawBlock(String::from("book")), 
+      Token::Ident(String::from("book")), 
       Token::TypeAssign,
       Token::TypeAssign, 
     ];
@@ -56,9 +59,9 @@ fn parse_prop_mistokened_type() {
 fn parse_prop_with_parenthesis() {
   let tokens = vec![
     Token::OpenArgs, 
-    Token::RawBlock(String::from("book")), 
+    Token::Ident(String::from("book")), 
     Token::TypeAssign, 
-    Token::RawBlock(String::from("BookData")), 
+    Token::Ident(String::from("BookData")), 
     Token::CloseArgs
   ];
     
@@ -70,13 +73,13 @@ fn parse_prop_with_parenthesis() {
 fn parse_props_with_parenthesis() {
   let tokens = vec![
     Token::OpenArgs, 
-    Token::RawBlock(String::from("book")), 
+    Token::Ident(String::from("book")), 
     Token::TypeAssign, 
-    Token::RawBlock(String::from("BookData")), 
+    Token::Ident(String::from("BookData")), 
     Token::CommaSeparator,
-    Token::RawBlock(String::from("author")), 
+    Token::Ident(String::from("author")), 
     Token::TypeAssign, 
-    Token::RawBlock(String::from("AuthorData")), 
+    Token::Ident(String::from("AuthorData")), 
     Token::CloseArgs
   ];
     
@@ -91,7 +94,7 @@ fn parse_props_with_parenthesis() {
 fn parse_simple_autoclosing_tag() {
   let tokens = vec![
     Token::StartTag, 
-    Token::RawBlock(String::from("Box")), 
+    Token::Ident(String::from("Box")), 
     Token::EndAutoclosingTag
   ];
 
@@ -111,7 +114,7 @@ fn parse_simple_autoclosing_tag() {
 fn parse_simple_tag() {
   let tokens = vec![
     Token::StartTag, 
-    Token::RawBlock(String::from("Box")), 
+    Token::Ident(String::from("Box")), 
     Token::EndTag,
     Token::CloseTag(String::from("Box"))
   ];
@@ -150,11 +153,11 @@ fn parse_body() {
 fn parse_component_def() {
   let tokens = vec![
     Token::KwComponent, 
-    Token::RawBlock(String::from("Foo")),
+    Token::Ident(String::from("Foo")),
     Token::OpenArgs,
-    Token::RawBlock(String::from("book")), 
+    Token::Ident(String::from("book")), 
     Token::TypeAssign, 
-    Token::RawBlock(String::from("BookData")),
+    Token::Ident(String::from("BookData")),
     Token::CloseArgs,
     Token::OpenBody,
       Token::LogicBlock(String::from("const test = 123;")),
@@ -181,7 +184,7 @@ fn parse_component_def() {
 fn parse_layout_def() {
   let tokens = vec![
     Token::KwLayout, 
-    Token::RawBlock(String::from("Foo")),
+    Token::Ident(String::from("Foo")),
     Token::OpenBody,
       Token::LogicBlock(String::from("const test = 123;")),
       Token::Divider,
@@ -204,11 +207,11 @@ fn parse_layout_def() {
 fn parse_page_def() {
   let tokens = vec![
     Token::KwPage, 
-    Token::RawBlock(String::from("Foo")),
+    Token::Ident(String::from("Foo")),
     Token::OpenArgs,
-    Token::RawBlock(String::from("book")), 
+    Token::Ident(String::from("book")), 
     Token::TypeAssign, 
-    Token::RawBlock(String::from("BookData")),
+    Token::Ident(String::from("BookData")),
     Token::CloseArgs,
     Token::OpenBody,
       Token::LogicBlock(String::from("const test = 123;")),
@@ -235,11 +238,11 @@ fn parse_page_def() {
 fn parse_ori_file() {
   let tokens = [
     Token::KwComponent, 
-    Token::RawBlock(String::from("Foo")),
+    Token::Ident(String::from("Foo")),
     Token::OpenArgs,
-      Token::RawBlock(String::from("book")), Token::TypeAssign, Token::RawBlock(String::from("BookData")),
+      Token::Ident(String::from("book")), Token::TypeAssign, Token::Ident(String::from("BookData")),
       Token::CommaSeparator,
-      Token::RawBlock(String::from("author")), Token::TypeAssign, Token::RawBlock(String::from("AuthorData")),
+      Token::Ident(String::from("author")), Token::TypeAssign, Token::Ident(String::from("AuthorData")),
     Token::CloseArgs,
     Token::OpenBody,
       Token::LogicBlock(String::from("const test = 123;")),
@@ -267,4 +270,149 @@ fn parse_ori_file() {
       ]
     }
   ));
+}
+
+// --- attr value parsers ---
+
+#[test]
+fn parse_attr_static_string_value() {
+  let tokens = vec![Token::ValueString(String::from("\"hello\""))];
+  let result = attr_static_string_value_parser().parse(&tokens).into_result();
+  assert_eq!(result, Ok(Static::String(String::from("\"hello\""))));
+}
+
+#[test]
+fn parse_attr_static_int_value() {
+  let tokens = vec![Token::ValueNumber(String::from("42"))];
+  let result = attr_static_int_value_parser().parse(&tokens).into_result();
+  assert_eq!(result, Ok(Static::NumberInt(42)));
+}
+
+#[test]
+fn parse_attr_static_int_wrong_token() {
+  let tokens = vec![Token::ValueString(String::from("\"hello\""))];
+  assert!(attr_static_int_value_parser().parse(&tokens).into_result().is_err());
+}
+
+#[test]
+fn parse_attr_simple_expression_var() {
+  let tokens = vec![
+    Token::OpenExpr,
+    Token::Ident(String::from("myVar")),
+    Token::CloseExpr,
+  ];
+  let result = attr_simple_expression_var_value_parser().parse(&tokens).into_result();
+  assert_eq!(result, Ok(SimpleExpression::Var(String::from("myVar"))));
+}
+
+#[test]
+fn parse_attr_simple_expression_var_missing_close() {
+  let tokens = vec![
+    Token::OpenExpr,
+    Token::Ident(String::from("myVar")),
+  ];
+  assert!(attr_simple_expression_var_value_parser().parse(&tokens).into_result().is_err());
+}
+
+#[test]
+fn parse_attr_simple_expression_dot_two_segments() {
+  // {{book.author}} → Dot(Var("book"), "author")
+  let tokens = vec![
+    Token::OpenExpr,
+    Token::Ident(String::from("book")),
+    Token::PeriodSeparator,
+    Token::Ident(String::from("author")),
+    Token::CloseExpr,
+  ];
+  let result = attr_simple_expression_dot_value_parser().parse(&tokens).into_result();
+  assert_eq!(result, Ok(
+    SimpleExpression::Dot(
+      Box::new(SimpleExpression::Var(String::from("book"))),
+      String::from("author"),
+    )
+  ));
+}
+
+#[test]
+fn parse_attr_simple_expression_dot_three_segments() {
+  // {{book.author.id}} → Dot(Dot(Var("book"), "author"), "id")
+  let tokens = vec![
+    Token::OpenExpr,
+    Token::Ident(String::from("book")),
+    Token::PeriodSeparator,
+    Token::Ident(String::from("author")),
+    Token::PeriodSeparator,
+    Token::Ident(String::from("id")),
+    Token::CloseExpr,
+  ];
+  let result = attr_simple_expression_dot_value_parser().parse(&tokens).into_result();
+  assert_eq!(result, Ok(
+    SimpleExpression::Dot(
+      Box::new(SimpleExpression::Dot(
+        Box::new(SimpleExpression::Var(String::from("book"))),
+        String::from("author"),
+      )),
+      String::from("id"),
+    )
+  ));
+}
+
+#[test]
+fn parse_attr_simple_expression_dot_missing_segment() {
+  // {{book.}} → error
+  let tokens = vec![
+    Token::OpenExpr,
+    Token::Ident(String::from("book")),
+    Token::PeriodSeparator,
+    Token::CloseExpr,
+  ];
+  assert!(attr_simple_expression_dot_value_parser().parse(&tokens).into_result().is_err());
+}
+
+// --- attr parser ---
+
+#[test]
+fn parse_attr_literal_string() {
+  let tokens = vec![
+    Token::Ident(String::from("color")),
+    Token::AttrAssign,
+    Token::ValueString(String::from("\"red\"")),
+  ];
+  let result = attr_parser().parse(&tokens).into_result();
+  assert_eq!(result, Ok(Attr {
+    name: String::from("color"),
+    value: AttrValue::Literal(Static::String(String::from("\"red\"")))
+  }));
+}
+
+#[test]
+fn parse_attr_literal_int() {
+  let tokens = vec![
+    Token::Ident(String::from("size")),
+    Token::AttrAssign,
+    Token::ValueNumber(String::from("12")),
+  ];
+  let result = attr_parser().parse(&tokens).into_result();
+  assert_eq!(result, Ok(Attr {
+    name: String::from("size"),
+    value: AttrValue::Literal(Static::NumberInt(12))
+  }));
+}
+
+#[test]
+fn parse_attr_missing_assign() {
+  let tokens = vec![
+    Token::Ident(String::from("color")),
+    Token::ValueString(String::from("\"red\"")),
+  ];
+  assert!(attr_parser().parse(&tokens).into_result().is_err());
+}
+
+#[test]
+fn parse_attr_missing_value() {
+  let tokens = vec![
+    Token::Ident(String::from("color")),
+    Token::AttrAssign,
+  ];
+  assert!(attr_parser().parse(&tokens).into_result().is_err());
 }

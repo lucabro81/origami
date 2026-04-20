@@ -45,7 +45,7 @@ pub enum Token {
     Unsafe,             
 
     #[regex(r"[[:alpha:]]+", |lex| lex.slice().to_string())]
-    RawBlock(String), // <--
+    Ident(String), // <--
 
     #[regex(r"</[[:alpha:]]+>", |lex| lex.slice()[2..lex.slice().len()-1].to_string())]
     CloseTag(String),

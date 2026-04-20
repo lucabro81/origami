@@ -231,7 +231,7 @@ fn component_with_single_prop() {
 #[test]
 fn component_with_multiple_props_and_logic() {
     // Full pipeline: two props, logic block, template referencing both props via expressions
-    let input = "component BookCard(title: string, author: string) {\nconst label = title;\n----\n<Box>\n<Text value={{label}}/>\n</Box>\n}";
+    let input = "component BookCard(title: string, author: string) {\nconst label = title;\n----\n<Box>\n<Text value={{book.title}}/>\n</Box>\n}";
     let tokens = lex(preprocess(input, "<test>").unwrap()).unwrap();
     assert_eq!(tokens, vec![
         Token::KwComponent, Token::Ident(String::from("BookCard")),
@@ -244,9 +244,15 @@ fn component_with_multiple_props_and_logic() {
         Token::LogicBlock(String::from("const label = title;\n")),
         Token::Divider,
         Token::StartTag, Token::Ident(String::from("Box")), Token::EndTag,
-        Token::StartTag, Token::Ident(String::from("Text")),
-        Token::Ident(String::from("value")), Token::AttrAssign,
-        Token::OpenExpr, Token::Ident(String::from("label")), Token::CloseExpr,
+        Token::StartTag, 
+            Token::Ident(String::from("Text")),
+            Token::Ident(String::from("value")), 
+                Token::AttrAssign,
+                Token::OpenExpr, 
+                     Token::Ident(String::from("book")), 
+                     Token::PeriodSeparator, 
+                     Token::Ident(String::from("title")), 
+                Token::CloseExpr,
         Token::EndAutoclosingTag,
         Token::CloseTag(String::from("Box")),
         Token::CloseBody,
@@ -276,7 +282,7 @@ fn minimal_file() {
 
 #[test]
 fn tempalte_with_number_attr() {
-    let sanitized = "component TestComponent {\n----\n<Column col=123></Column>\n}";
+    let sanitized = "component TestComponent {\n----\n<Column row=123 col=12.3></Column>\n}";
     let preprocessed = crate::PreprocessResult {
         sanitized: sanitized.to_string(),
         logic_blocks: vec![],
@@ -289,7 +295,8 @@ fn tempalte_with_number_attr() {
         Token::Divider,
         Token::StartTag, 
             Token::Ident(String::from("Column")), 
-            Token::Ident(String::from("col")), Token::AttrAssign, Token::ValueNumber(String::from("123")),
+            Token::Ident(String::from("row")), Token::AttrAssign, Token::ValueNumber(String::from("123")),
+            Token::Ident(String::from("col")), Token::AttrAssign, Token::ValueNumber(String::from("12.3")),
         Token::EndTag,
         Token::CloseTag(String::from("Column")),
         Token::CloseBody,
@@ -299,7 +306,7 @@ fn tempalte_with_number_attr() {
 
 #[test]
 fn tempalte_with_mixed_attr() {
-    let sanitized = "component TestComponent {\n----\n<Column col=123 row=\"test\"></Column>\n}";
+    let sanitized = "component TestComponent {\n----\n<Column col=123 row=\"test\" test=1.23></Column>\n}";
     let preprocessed = crate::PreprocessResult {
         sanitized: sanitized.to_string(),
         logic_blocks: vec![],
@@ -314,8 +321,10 @@ fn tempalte_with_mixed_attr() {
             Token::Ident(String::from("Column")), 
 
             Token::Ident(String::from("col")), Token::AttrAssign, Token::ValueNumber(String::from("123")),
-            
+
             Token::Ident(String::from("row")), Token::AttrAssign, Token::ValueString(String::from("\"test\"")),
+
+            Token::Ident(String::from("test")), Token::AttrAssign, Token::ValueNumber(String::from("1.23")),
         Token::EndTag,
         Token::CloseTag(String::from("Column")),
         Token::CloseBody,

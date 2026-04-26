@@ -1,5 +1,5 @@
 use chumsky::Parser;
-use origami_runtime::{Attr, AttrValue, Body, ComponentNode, Declaration, ExpressionNode, Node, OriFile, Prop, SimpleExpression, Static, Token};
+use origami_runtime::{Attr, AttrValue, Body, ComponentNode, Declaration, ExpressionNode, Node, OriFile, Prop, SimpleExpression, SlotNode, Static, Token};
 
 use crate::{
   attrs::{attr_parser, attr_simple_expression_dot_value_parser, attr_simple_expression_var_value_parser, attr_static_int_value_parser, attr_static_string_value_parser, attr_unsafe_value_parser},
@@ -401,6 +401,10 @@ fn parse_template_with_expr() {
       Token::Ident(String::from("author")), 
     Token::CloseExpr,
 
+    Token::OpenExpr, 
+      Token::Ident(String::from("simpleVar")), 
+    Token::CloseExpr,
+
     Token::CloseTag(String::from("Column"))
   ];
 
@@ -421,11 +425,48 @@ fn parse_template_with_expr() {
             Box::new(SimpleExpression::Var(String::from("book"))), 
             String::from("author")
           )
+        }),
+        Node::Expr(ExpressionNode {
+          value: SimpleExpression::Var(String::from("simpleVar"))
         })
       ]
     })
   ));
 }
+
+#[test]
+fn parse_template_with_slot() {
+  let tokens = vec![
+    Token::StartTag, 
+      Token::Ident(String::from("Column")), 
+      Token::Ident(String::from("width")), 
+        Token::AttrAssign,
+        Token::ValueNumber(String::from("123")),
+    Token::EndTag,
+
+    Token::Slot,
+
+    Token::CloseTag(String::from("Column"))
+  ];
+
+  let result = node_parser().parse(&tokens).into_result();
+
+  assert_eq!(result, Ok(
+    Node::Component(ComponentNode {
+      name: String::from("Column"),
+      attrs: vec![
+        Attr { 
+          name: String::from("width"), 
+          value: AttrValue::Literal(Static::NumberInt(123i64)),
+        },
+      ],
+      children: vec![
+        Node::Slot(SlotNode {})
+      ]
+    })
+  ));
+}
+
 // --- declaration parsers ---
 
 #[test]

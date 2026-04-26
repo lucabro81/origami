@@ -30,6 +30,8 @@ pub enum Token {
     OpenEach,           // <each
     #[token("<unsafe")]
     OpenUnsafe,         // <unsafe
+    #[token("<slot />")]
+    Slot,         
 
     #[token("condition")]
     IfCondition,        

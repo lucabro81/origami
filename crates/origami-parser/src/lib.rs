@@ -4,11 +4,16 @@ pub mod attrs;
 use crate::{attrs::{attr_parser, attr_simple_expression_value_parser}, props::props_parser};
 
 use chumsky::{prelude::*};
-use origami_runtime::{Attr, Body, ComponentNode, Declaration, ExpressionNode, Node, OriFile, Token};
+use origami_runtime::{Attr, Body, ComponentNode, Declaration, ExpressionNode, Node, OriFile, SlotNode, Token};
 
 pub fn node_expr_parser<'src>() -> impl Parser<'src, &'src [Token], Node, extra::Err<Rich<'src, Token>>> {
   attr_simple_expression_value_parser()
     .map(|expr| Node::Expr(ExpressionNode { value: expr }))
+}
+
+pub fn node_slot_parser<'src>() -> impl Parser<'src, &'src [Token], Node, extra::Err<Rich<'src, Token>>> {
+  just(Token::Slot)
+    .map(|_| Node::Slot(SlotNode{}))
 }
 
 pub fn node_parser<'src>() -> impl Parser<'src, &'src [Token], Node, extra::Err<Rich<'src, Token>>> {
@@ -40,9 +45,12 @@ pub fn node_parser<'src>() -> impl Parser<'src, &'src [Token], Node, extra::Err<
 
     let expr_node = node_expr_parser();
 
+    let slot_node = node_slot_parser();
+
     autoclosing
       .or(open_close)
       .or(expr_node.boxed())
+      .or(slot_node.boxed())
   })
 }
 

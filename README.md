@@ -1,6 +1,6 @@
 # Origami
 
-A fullstack opinionated framework with a closed-vocabulary DSL (`.ori` files) that enforces design system compliance at compile time.
+A fullstack opinionated framework with a closed-vocabulary DSL (`.ori` files) that enforces design system compliance at compile time. (WIP, not ready for use)
 
 ---
 

@@ -3,8 +3,10 @@ use origami_runtime::{Attr, AttrValue, Body, ComponentNode, Declaration, Node, O
 
 use crate::{
   attrs::{attr_parser, attr_simple_expression_dot_value_parser, attr_simple_expression_var_value_parser, attr_static_int_value_parser, attr_static_string_value_parser, attr_unsafe_value_parser},
-  body_parser, declaration_parser, ori_file_parser, props::prop_parser, props_parser, autoclosing_node_parser, node_parser,
+  body_parser, declaration_parser, ori_file_parser, props::prop_parser, props_parser, node_parser,
 };
+
+// --- props parser ---
 
 #[test]
 fn parse_prop() {
@@ -90,6 +92,8 @@ fn parse_props_with_parenthesis() {
   ]));
 }
 
+// --- template parser ---
+
 #[test]
 fn parse_simple_autoclosing_tag() {
   let tokens = vec![
@@ -98,7 +102,7 @@ fn parse_simple_autoclosing_tag() {
     Token::EndAutoclosingTag
   ];
 
-  let result = autoclosing_node_parser().parse(&tokens).into_result();
+  let result = node_parser().parse(&tokens).into_result();
 
   assert_eq!(result, Ok(
     Node::Component(ComponentNode {
@@ -150,7 +154,7 @@ fn parse_autoclosing_tag_with_attrs() {
     Token::EndAutoclosingTag
   ];
 
-  let result = autoclosing_node_parser().parse(&tokens).into_result();
+  let result = node_parser().parse(&tokens).into_result();
 
   assert_eq!(result, Ok(
     Node::Component(ComponentNode {
@@ -214,7 +218,177 @@ fn parse_simple_tag() {
 }
 
 #[test]
-fn parse_body() {
+fn parse_simple_tag_with_attrs() {
+  let tokens = vec![
+    Token::StartTag, 
+      Token::Ident(String::from("Box")), 
+
+      Token::Ident(String::from("width")), 
+        Token::AttrAssign,
+        Token::ValueNumber(String::from("123")),
+
+      Token::Ident(String::from("height")), 
+        Token::AttrAssign,
+        Token::ValueNumber(String::from("32.1")),
+
+      Token::Ident(String::from("title")), 
+        Token::AttrAssign,
+        Token::ValueString(String::from("\"Un cavaliere per l'affascinante spia\"")),
+
+      Token::Ident(String::from("author")), 
+        Token::AttrAssign,
+        Token::OpenExpr, 
+              Token::Ident(String::from("book")), 
+              Token::PeriodSeparator, 
+              Token::Ident(String::from("author")), 
+        Token::CloseExpr,
+
+      Token::Ident(String::from("size")), 
+        Token::AttrAssign,
+        Token::OpenExpr, 
+          Token::Unsafe,
+            Token::OpenArgs,
+              Token::ValueNumber(String::from("42")),
+              Token::CommaSeparator,
+            Token::ValueString(String::from("\"needed for legacy API\"")),
+          Token::CloseArgs,
+        Token::CloseExpr,
+    Token::EndTag,
+    Token::CloseTag(String::from("Box"))
+  ];
+
+  let result = node_parser().parse(&tokens).into_result();
+
+  assert_eq!(result, Ok(
+    Node::Component(ComponentNode {
+      name: String::from("Box"),
+      attrs: vec![
+        Attr { 
+          name: String::from("width"), 
+          value: AttrValue::Literal(Static::NumberInt(123i64)),
+        },
+        Attr { 
+          name: String::from("height"), 
+          value: AttrValue::Literal(Static::NumberFloat(32.1f64))
+        },
+        Attr { 
+          name: String::from("title"), 
+          value: AttrValue::Literal(Static::String(String::from("\"Un cavaliere per l'affascinante spia\"")))
+        },
+        Attr { 
+          name: String::from("author"), 
+          value: AttrValue::Dynamic(
+            SimpleExpression::Dot(
+              Box::new(SimpleExpression::Var(String::from("book"))), 
+              String::from("author")
+            )
+          ) 
+        },
+        Attr { 
+          name: String::from("size"), 
+          value: AttrValue::UnsafeValue {
+            value: Static::NumberInt(42),
+            reason: String::from("\"needed for legacy API\""),
+          }
+        }
+        
+      ],
+      children: vec![]
+    })
+  ));
+
+}
+
+#[test]
+fn parse_template() {
+  let tokens = vec![
+    Token::StartTag, 
+      Token::Ident(String::from("Column")), 
+      Token::Ident(String::from("width")), 
+        Token::AttrAssign,
+        Token::ValueNumber(String::from("123")),
+    Token::EndTag,
+
+      Token::StartTag, 
+        Token::Ident(String::from("Box")), 
+        Token::Ident(String::from("height")), 
+          Token::AttrAssign,
+          Token::ValueNumber(String::from("1.23")),
+      Token::EndTag,
+      
+        Token::StartTag, 
+          Token::Ident(String::from("Text")), 
+          Token::Ident(String::from("title")), 
+            Token::AttrAssign,
+            Token::ValueString(String::from("\"Un cavaliere per l'affascinante spia\"")),
+        Token::EndAutoclosingTag,
+
+      Token::CloseTag(String::from("Box")),
+
+      Token::StartTag, 
+        Token::Ident(String::from("Text")), 
+        Token::Ident(String::from("title")), 
+          Token::AttrAssign,
+          Token::ValueString(String::from("\"Sedotta dal duca: la sua vendetta, il mio ventre, la nostra maledizione\"")),
+      Token::EndAutoclosingTag,
+
+    Token::CloseTag(String::from("Column"))
+  ];
+
+  let result = node_parser().parse(&tokens).into_result();
+
+  assert_eq!(result, Ok(
+    Node::Component(ComponentNode {
+      name: String::from("Column"),
+      attrs: vec![
+        Attr { 
+          name: String::from("width"), 
+          value: AttrValue::Literal(Static::NumberInt(123i64)),
+        },
+      ],
+      children: vec![
+        Node::Component(ComponentNode {
+          name: String::from("Box"),
+          attrs: vec![
+            Attr { 
+              name: String::from("height"), 
+              value: AttrValue::Literal(Static::NumberFloat(1.23f64)),
+            },
+          ],
+          children: vec![
+            Node::Component(ComponentNode {
+              name: String::from("Text"),
+              attrs: vec![
+                Attr { 
+                  name: String::from("title"), 
+                  value: AttrValue::Literal(Static::String(String::from("\"Un cavaliere per l'affascinante spia\""))),
+                },
+              ],
+              children: vec![]
+            })
+          ]
+        }),
+        Node::Component(ComponentNode {
+          name: String::from("Text"),
+          attrs: vec![
+            Attr { 
+              name: String::from("title"), 
+              value: AttrValue::Literal(Static::String(String::from("\"Sedotta dal duca: la sua vendetta, il mio ventre, la nostra maledizione\""))),
+            },
+          ],
+          children: vec![]
+        })
+      ]
+    })
+  
+  ));
+
+}
+
+// --- declaration parsers ---
+
+#[test]
+fn parse_body_with_empty_template() {
   let tokens = vec![
     Token::OpenBody,
       Token::LogicBlock(String::from("const test = 123;")),
@@ -227,6 +401,99 @@ fn parse_body() {
       Body {
         logic_block: String::from("const test = 123;"),
         template: vec![]
+      }
+    ));
+}
+
+#[test]
+fn parse_body_with_one_root() {
+  let tokens = vec![
+    Token::OpenBody,
+      Token::LogicBlock(String::from("const test = 123;")),
+      Token::Divider,
+      
+      Token::StartTag, 
+        Token::Ident(String::from("Box")), 
+        Token::Ident(String::from("height")), 
+          Token::AttrAssign,
+          Token::ValueNumber(String::from("1.23")),
+      Token::EndTag,
+      
+        Token::StartTag, 
+          Token::Ident(String::from("Text")), 
+          Token::Ident(String::from("title")), 
+            Token::AttrAssign,
+            Token::ValueString(String::from("\"Un cavaliere per l'affascinante spia\"")),
+        Token::EndAutoclosingTag,
+
+      Token::CloseTag(String::from("Box")),
+
+    Token::CloseBody,
+  ];
+
+  let result = body_parser().parse(&tokens).into_result();
+  assert_eq!(result, Ok(
+      Body {
+        logic_block: String::from("const test = 123;"),
+        template: vec![
+          Node::Component(ComponentNode {
+            name: String::from("Box"),
+            attrs: vec![
+              Attr { 
+                name: String::from("height"), 
+                value: AttrValue::Literal(Static::NumberFloat(1.23f64)),
+              },
+            ],
+            children: vec![
+              Node::Component(ComponentNode {
+                name: String::from("Text"),
+                attrs: vec![
+                  Attr { 
+                    name: String::from("title"), 
+                    value: AttrValue::Literal(Static::String(String::from("\"Un cavaliere per l'affascinante spia\""))),
+                  },
+                ],
+                children: vec![]
+              })
+            ]
+          })
+        ]
+      }
+    ));
+}
+
+#[test]
+fn parse_body_with_no_logic_block() {
+  let tokens = vec![
+    Token::OpenBody,
+      Token::Divider,
+      
+      Token::StartTag, 
+        Token::Ident(String::from("Text")), 
+        Token::Ident(String::from("title")), 
+          Token::AttrAssign,
+          Token::ValueString(String::from("\"Un cavaliere per l'affascinante spia\"")),
+      Token::EndAutoclosingTag,
+
+    Token::CloseBody,
+  ];
+
+  let result = body_parser().parse(&tokens).into_result();
+  assert_eq!(result, Ok(
+      Body {
+        logic_block: String::from(""),
+        template: vec![
+          Node::Component(ComponentNode {
+            name: String::from("Text"),
+            attrs: vec![
+              Attr { 
+                name: String::from("title"), 
+                value: AttrValue::Literal(Static::String(String::from("\"Un cavaliere per l'affascinante spia\""))),
+              },
+            ],
+            children: vec![]
+          })
+        ]
       }
     ));
 }

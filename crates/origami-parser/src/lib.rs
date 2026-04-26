@@ -6,47 +6,49 @@ use crate::{attrs::attr_parser, props::props_parser};
 use chumsky::{prelude::*};
 use origami_runtime::{Attr, Body, ComponentNode, Declaration, Node, OriFile, Token};
 
-pub fn autoclosing_node_parser<'src>() -> impl Parser<'src, &'src [Token], Node, extra:: Err<Rich<'src, Token>>> {
-  just(Token::StartTag)
-    .ignore_then(select! { Token::Ident(name) => name })
-    .then(
-      attr_parser()
-      .repeated()
-      .collect::<Vec<Attr>>()
-    )
-    .map(|(name, attrs)| Node::Component(ComponentNode {
-      name,
-      attrs,
-      children: vec![]
-    }))
-  .then_ignore(just(Token::EndAutoclosingTag))
-}
+pub fn node_parser<'src>() -> impl Parser<'src, &'src [Token], Node, extra::Err<Rich<'src, Token>>> {
+  recursive::<_, _, extra::Err<Rich<'src, Token>>, _, _>(|node| {
 
-pub fn node_parser<'src>() -> impl Parser<'src, &'src [Token], Node, extra:: Err<Rich<'src, Token>>> {
-  just(Token::StartTag)
-    .ignore_then(select! { Token::Ident(name) => name })
-    .then(
-      attr_parser()
-      .repeated()
-      .collect::<Vec<Attr>>()
-    )
-    .then_ignore(just(Token::EndTag))
-    .map(|(name, attrs)| Node::Component(ComponentNode {
-      name,
-      attrs,
-      children: vec![]
-    }))
-  .then_ignore(select! { Token::CloseTag(name) => name })
+    let attrs = attr_parser().repeated().collect::<Vec<Attr>>().boxed();
 
+    let autoclosing = just(Token::StartTag)
+      .ignore_then(select! { Token::Ident(name) => name })
+      .then(attrs.clone())
+      .then_ignore(just(Token::EndAutoclosingTag))
+      .map(|(name, attrs)| Node::Component(ComponentNode {
+        name,
+        attrs,
+        children: vec![]
+      }));
+
+    let open_close = just(Token::StartTag)
+      .ignore_then(select! { Token::Ident(name) => name })
+      .then(attrs)
+      .then_ignore(just(Token::EndTag))
+      .then(node.repeated().collect::<Vec<Node>>()) 
+      .map(|((name, attrs), children)| Node::Component(ComponentNode {
+        name,
+        attrs,
+        children
+      }))
+      .then_ignore(select! { Token::CloseTag(_) => () });
+
+    autoclosing.or(open_close)
+  })
 }
 
 fn body_parser<'src>() -> impl Parser<'src, &'src [Token], Body, extra:: Err<Rich<'src, Token>>> {
   just(Token::OpenBody)
-    .ignore_then(select! { Token::LogicBlock(block) => block})
+    .ignore_then(select! { Token::LogicBlock(block) => block}.or_not())
     .then_ignore(just(Token::Divider))
-    .map(|block| Body {
-      logic_block: block,
-      template: vec![]
+    .then(
+      node_parser()
+        .repeated()
+        .collect::<Vec<Node>>()
+      )
+    .map(|(block, children)| Body {
+      logic_block: block.unwrap_or(String::from("")),
+      template: children
     })
   .then_ignore(just(Token::CloseBody))
 

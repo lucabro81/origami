@@ -27,9 +27,3 @@ use origami_lexer::{preprocess, lex};
 let preprocessed = preprocess(source, "my_component.ori")?;
 let tokens = lex(preprocessed)?;
 ```
-
-## Crate boundaries
-
-- Depends on `origami-runtime` for `Token`, error types, and error codes.
-- No other origami crates depend on this one directly — `origami-parser` is the next consumer.
-- Does not use `tokio` or any async runtime.

@@ -1,5 +1,5 @@
 use chumsky::Parser;
-use origami_runtime::{Attr, AttrValue, Body, ComponentNode, Declaration, Node, OriFile, Prop, SimpleExpression, Static, Token};
+use origami_runtime::{Attr, AttrValue, Body, ComponentNode, Declaration, ExpressionNode, Node, OriFile, Prop, SimpleExpression, Static, Token};
 
 use crate::{
   attrs::{attr_parser, attr_simple_expression_dot_value_parser, attr_simple_expression_var_value_parser, attr_static_int_value_parser, attr_static_string_value_parser, attr_unsafe_value_parser},
@@ -238,9 +238,9 @@ fn parse_simple_tag_with_attrs() {
       Token::Ident(String::from("author")), 
         Token::AttrAssign,
         Token::OpenExpr, 
-              Token::Ident(String::from("book")), 
-              Token::PeriodSeparator, 
-              Token::Ident(String::from("author")), 
+          Token::Ident(String::from("book")), 
+          Token::PeriodSeparator, 
+          Token::Ident(String::from("author")), 
         Token::CloseExpr,
 
       Token::Ident(String::from("size")), 
@@ -385,6 +385,47 @@ fn parse_template() {
 
 }
 
+#[test]
+fn parse_template_with_expr() {
+  let tokens = vec![
+    Token::StartTag, 
+      Token::Ident(String::from("Column")), 
+      Token::Ident(String::from("width")), 
+        Token::AttrAssign,
+        Token::ValueNumber(String::from("123")),
+    Token::EndTag,
+
+    Token::OpenExpr, 
+      Token::Ident(String::from("book")), 
+      Token::PeriodSeparator, 
+      Token::Ident(String::from("author")), 
+    Token::CloseExpr,
+
+    Token::CloseTag(String::from("Column"))
+  ];
+
+  let result = node_parser().parse(&tokens).into_result();
+
+  assert_eq!(result, Ok(
+    Node::Component(ComponentNode {
+      name: String::from("Column"),
+      attrs: vec![
+        Attr { 
+          name: String::from("width"), 
+          value: AttrValue::Literal(Static::NumberInt(123i64)),
+        },
+      ],
+      children: vec![
+        Node::Expr(ExpressionNode {
+          value: SimpleExpression::Dot(
+            Box::new(SimpleExpression::Var(String::from("book"))), 
+            String::from("author")
+          )
+        })
+      ]
+    })
+  ));
+}
 // --- declaration parsers ---
 
 #[test]

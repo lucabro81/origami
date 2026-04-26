@@ -1,10 +1,15 @@
 pub mod props;
 pub mod attrs;
 
-use crate::{attrs::attr_parser, props::props_parser};
+use crate::{attrs::{attr_parser, attr_simple_expression_value_parser}, props::props_parser};
 
 use chumsky::{prelude::*};
-use origami_runtime::{Attr, Body, ComponentNode, Declaration, Node, OriFile, Token};
+use origami_runtime::{Attr, Body, ComponentNode, Declaration, ExpressionNode, Node, OriFile, Token};
+
+pub fn node_expr_parser<'src>() -> impl Parser<'src, &'src [Token], Node, extra::Err<Rich<'src, Token>>> {
+  attr_simple_expression_value_parser()
+    .map(|expr| Node::Expr(ExpressionNode { value: expr }))
+}
 
 pub fn node_parser<'src>() -> impl Parser<'src, &'src [Token], Node, extra::Err<Rich<'src, Token>>> {
   recursive::<_, _, extra::Err<Rich<'src, Token>>, _, _>(|node| {
@@ -33,7 +38,11 @@ pub fn node_parser<'src>() -> impl Parser<'src, &'src [Token], Node, extra::Err<
       }))
       .then_ignore(select! { Token::CloseTag(_) => () });
 
-    autoclosing.or(open_close)
+    let expr_node = node_expr_parser();
+
+    autoclosing
+      .or(open_close)
+      .or(expr_node.boxed())
   })
 }
 

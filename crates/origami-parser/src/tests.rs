@@ -1,5 +1,5 @@
 use chumsky::Parser;
-use origami_runtime::{Attr, AttrValue, Body, ComponentNode, Declaration, ExpressionNode, Node, OriFile, Prop, SimpleExpression, SlotNode, Static, Token};
+use origami_runtime::{Attr, AttrValue, Body, ComponentNode, Declaration, ExpressionNode, Node, OriFile, Prop, SimpleExpression, SlotNode, Static, Token, UnsafeNode};
 
 use crate::{
   attrs::{attr_parser, attr_simple_expression_dot_value_parser, attr_simple_expression_var_value_parser, attr_static_int_value_parser, attr_static_string_value_parser, attr_unsafe_value_parser},
@@ -462,6 +462,45 @@ fn parse_template_with_slot() {
       ],
       children: vec![
         Node::Slot(SlotNode {})
+      ]
+    })
+  ));
+}
+
+#[test]
+fn parse_template_with_unsafe_block() {
+  let tokens = vec![
+    Token::StartTag, 
+      Token::Ident(String::from("Column")), 
+      Token::Ident(String::from("width")), 
+        Token::AttrAssign,
+        Token::ValueNumber(String::from("123")),
+    Token::EndTag,
+
+    Token::OpenUnsafe, Token::Reason, Token::AttrAssign, Token::ValueString(String::from("\"xss\"")),
+        Token::EndTag,
+        Token::UnsafeBlock(String::from("test")),
+        Token::CloseTag(String::from("unsafe")),
+
+    Token::CloseTag(String::from("Column"))
+  ];
+
+  let result = node_parser().parse(&tokens).into_result();
+
+  assert_eq!(result, Ok(
+    Node::Component(ComponentNode {
+      name: String::from("Column"),
+      attrs: vec![
+        Attr { 
+          name: String::from("width"), 
+          value: AttrValue::Literal(Static::NumberInt(123i64)),
+        },
+      ],
+      children: vec![
+        Node::Unsafe(UnsafeNode { 
+          reason: String::from("\"xss\""), 
+          children: String::from("test") 
+        })
       ]
     })
   ));

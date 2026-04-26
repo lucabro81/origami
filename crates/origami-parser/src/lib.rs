@@ -4,7 +4,7 @@ pub mod attrs;
 use crate::{attrs::{attr_parser, attr_simple_expression_value_parser}, props::props_parser};
 
 use chumsky::{prelude::*};
-use origami_runtime::{Attr, Body, ComponentNode, Declaration, ExpressionNode, Node, OriFile, SlotNode, Token};
+use origami_runtime::{Attr, Body, ComponentNode, Declaration, ExpressionNode, Node, OriFile, SlotNode, Token, UnsafeNode};
 
 pub fn node_expr_parser<'src>() -> impl Parser<'src, &'src [Token], Node, extra::Err<Rich<'src, Token>>> {
   attr_simple_expression_value_parser()
@@ -14,6 +14,17 @@ pub fn node_expr_parser<'src>() -> impl Parser<'src, &'src [Token], Node, extra:
 pub fn node_slot_parser<'src>() -> impl Parser<'src, &'src [Token], Node, extra::Err<Rich<'src, Token>>> {
   just(Token::Slot)
     .map(|_| Node::Slot(SlotNode{}))
+}
+
+pub fn node_unsafe_block_parser<'src>() -> impl Parser<'src, &'src [Token], Node, extra::Err<Rich<'src, Token>>> {
+  just(Token::OpenUnsafe)
+    .ignore_then(just(Token::Reason))
+    .ignore_then(just(Token::AttrAssign))
+    .ignore_then(select! { Token::ValueString(value) => value })
+    .then_ignore(just(Token::EndTag))
+    .then(select! { Token::UnsafeBlock(unsafe_block) => unsafe_block })
+    .then_ignore(just(Token::CloseTag(String::from("unsafe"))))
+    .map(|(reason, unsafe_block)| Node::Unsafe(UnsafeNode { reason, children: unsafe_block } ))
 }
 
 pub fn node_parser<'src>() -> impl Parser<'src, &'src [Token], Node, extra::Err<Rich<'src, Token>>> {
@@ -44,13 +55,14 @@ pub fn node_parser<'src>() -> impl Parser<'src, &'src [Token], Node, extra::Err<
       .then_ignore(select! { Token::CloseTag(_) => () });
 
     let expr_node = node_expr_parser();
-
     let slot_node = node_slot_parser();
+    let unsafe_node = node_unsafe_block_parser();
 
     autoclosing
       .or(open_close)
       .or(expr_node.boxed())
       .or(slot_node.boxed())
+      .or(unsafe_node.boxed())
   })
 }
 

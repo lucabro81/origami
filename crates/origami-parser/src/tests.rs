@@ -1,5 +1,5 @@
 use chumsky::Parser;
-use origami_runtime::{Attr, AttrValue, Body, ComponentNode, Declaration, ExpressionNode, Node, OriFile, Prop, SimpleExpression, SlotNode, Static, Token, UnsafeNode};
+use origami_runtime::{Attr, AttrValue, Body, ComponentNode, Declaration, ExpressionNode, LiteralNode, Node, OriFile, Prop, SimpleExpression, SlotNode, Static, TextNode, Token, UnsafeNode};
 
 use crate::{
   attrs::{attr_parser, attr_simple_expression_dot_value_parser, attr_simple_expression_var_value_parser, attr_static_int_value_parser, attr_static_string_value_parser, attr_unsafe_value_parser},
@@ -434,6 +434,42 @@ fn parse_template_with_expr() {
   ));
 }
 
+fn parse_template_with_static() {
+  let tokens = vec![
+    Token::StartTag, 
+      Token::Ident(String::from("Column")), 
+      Token::Ident(String::from("width")), 
+        Token::AttrAssign,
+        Token::ValueNumber(String::from("123")),
+    Token::EndTag,
+
+    Token::ValueString(String::from("value string")),
+    Token::ValueNumber(String::from("123")),
+    Token::ValueNumber(String::from("1.23")),
+
+    Token::CloseTag(String::from("Column"))
+  ];
+
+  let result = node_parser().parse(&tokens).into_result();
+
+  assert_eq!(result, Ok(
+    Node::Component(ComponentNode {
+      name: String::from("Column"),
+      attrs: vec![
+        Attr { 
+          name: String::from("width"), 
+          value: AttrValue::Literal(Static::NumberInt(123i64)),
+        },
+      ],
+      children: vec![
+        Node::Literal(LiteralNode { value: Static::String(String::from("value string")) }),
+        Node::Literal(LiteralNode { value: Static::NumberInt(123i64) }),
+        Node::Literal(LiteralNode { value: Static::NumberFloat(1.23f64) })
+      ]
+    })
+  ));
+}
+
 #[test]
 fn parse_template_with_slot() {
   let tokens = vec![
@@ -505,6 +541,52 @@ fn parse_template_with_unsafe_block() {
     })
   ));
 }
+
+// #[test]
+// fn parse_template_text_tag_autoclose() {
+//   let tokens = vec![
+//     Token::StartTag, 
+//       Token::Ident(String::from("Text")), 
+//       Token::Ident(String::from("value")), 
+//         Token::AttrAssign,
+//         Token::ValueString(String::from("This is a content")),
+//     Token::EndAutoclosingTag
+//   ];
+
+//   let result = node_parser().parse(&tokens).into_result();
+
+//   assert_eq!(result, Ok(
+//     Node::Text(TextNode {
+//       value: String::from("This is a content")
+//     })
+//   ));
+// }
+
+// #[test]
+// fn parse_template_text_tag_open_close() {
+//   let tokens = vec![
+//     Token::StartTag, 
+//       Token::Ident(String::from("Text")), 
+//     Token::EndTag,
+//       Token::ValueString(String::from("This is a content")),
+//     Token::CloseTag(String::from("Text"))
+//   ];
+
+//   let result = node_parser().parse(&tokens).into_result();
+
+//   assert_eq!(result, Ok(
+//     Node::Component(ComponentNode {
+//       name: String::from("Text"),
+//       attrs: vec![],
+//       children: vec![
+//         Node::Literal(LiteralNode { 
+//           value: String::from("This is a content")
+//         })
+//       ]
+//     })
+//   ));
+// }
+
 
 // --- declaration parsers ---
 

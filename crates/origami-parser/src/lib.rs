@@ -1,14 +1,19 @@
 pub mod props;
 pub mod attrs;
 
-use crate::{attrs::{attr_parser, attr_simple_expression_value_parser}, props::props_parser};
+use crate::{attrs::{attr_literal_value_parser, attr_parser, attr_simple_expression_value_parser, attr_static_value_parser}, props::props_parser};
 
 use chumsky::{prelude::*};
-use origami_runtime::{Attr, Body, ComponentNode, Declaration, ExpressionNode, Node, OriFile, SlotNode, Token, UnsafeNode};
+use origami_runtime::{Attr, Body, ComponentNode, Declaration, ExpressionNode, LiteralNode, Node, OriFile, SlotNode, TextNode, Token, UnsafeNode};
 
 pub fn node_expr_parser<'src>() -> impl Parser<'src, &'src [Token], Node, extra::Err<Rich<'src, Token>>> {
   attr_simple_expression_value_parser()
-    .map(|expr| Node::Expr(ExpressionNode { value: expr }))
+    .map(|value| Node::Expr(ExpressionNode { value }))
+}
+
+pub fn node_literal_static_parser<'src>() -> impl Parser<'src, &'src [Token], Node, extra::Err<Rich<'src, Token>>> {
+  attr_static_value_parser()
+    .map(|value| Node::Literal(LiteralNode { value }))
 }
 
 pub fn node_slot_parser<'src>() -> impl Parser<'src, &'src [Token], Node, extra::Err<Rich<'src, Token>>> {
@@ -26,6 +31,18 @@ pub fn node_unsafe_block_parser<'src>() -> impl Parser<'src, &'src [Token], Node
     .then_ignore(just(Token::CloseTag(String::from("unsafe"))))
     .map(|(reason, unsafe_block)| Node::Unsafe(UnsafeNode { reason, children: unsafe_block } ))
 }
+
+// pub fn node_text_autoclose_parser<'src>() -> impl Parser<'src, &'src [Token], Node, extra::Err<Rich<'src, Token>>> {
+//   just(Token::StartTag)
+//     .ignore_then(just(Token::Ident(String::from("Text"))))
+//     .ignore_then(just(Token::Ident(String::from("value"))))
+//     .ignore_then(just(Token::AttrAssign))
+//     .ignore_then(select! { Token::ValueString(value) => value.as_str()[1..(value.len()-1)].to_string() })
+//     .then_ignore(just(Token::EndAutoclosingTag))
+//     .map(|value| Node::Text(TextNode {
+//       value
+//     }))
+// }
 
 pub fn node_parser<'src>() -> impl Parser<'src, &'src [Token], Node, extra::Err<Rich<'src, Token>>> {
   recursive::<_, _, extra::Err<Rich<'src, Token>>, _, _>(|node| {
@@ -61,6 +78,7 @@ pub fn node_parser<'src>() -> impl Parser<'src, &'src [Token], Node, extra::Err<
     autoclosing
       .or(open_close)
       .or(expr_node.boxed())
+      .or(node_literal_static_parser().boxed())
       .or(slot_node.boxed())
       .or(unsafe_node.boxed())
   })

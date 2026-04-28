@@ -59,6 +59,11 @@ pub struct ExpressionNode {
     pub value: SimpleExpression,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct LiteralNode {
+    pub value: Static,
+}
+
 /// Conditional node `<if condition={expr}>…</if>` with optional else and else-if branches.
 #[derive(Debug, Clone, PartialEq)]
 pub struct IfNode {
@@ -100,7 +105,8 @@ pub enum Node {
     /// Unsafe escape-hatch block `<unsafe>`.
     Unsafe(UnsafeNode),
     /// Placeholder in a component in which inject children. TBD: it's really needed? can be solved in a react way or simpler?
-    Slot(SlotNode)
+    Slot(SlotNode),
+    Literal(LiteralNode)
 }
 
 #[derive(Debug, PartialEq)]

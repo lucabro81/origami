@@ -1,10 +1,10 @@
 pub mod props;
 pub mod attrs;
 
-use crate::{attrs::{attr_literal_value_parser, attr_parser, attr_simple_expression_value_parser, attr_static_value_parser}, props::props_parser};
+use crate::{attrs::{attr_parser, attr_simple_expression_value_parser, attr_static_value_parser}, props::props_parser};
 
 use chumsky::{prelude::*};
-use origami_runtime::{Attr, Body, ComponentNode, Declaration, ExpressionNode, LiteralNode, Node, OriFile, SlotNode, TextNode, Token, UnsafeNode};
+use origami_runtime::{Attr, Body, ComponentNode, Declaration, EachNode, ExpressionNode, IfNode, LiteralNode, Node, OriFile, SimpleExpression, SlotNode, Token, UnsafeNode};
 
 pub fn node_expr_parser<'src>() -> impl Parser<'src, &'src [Token], Node, extra::Err<Rich<'src, Token>>> {
   attr_simple_expression_value_parser()
@@ -32,22 +32,81 @@ pub fn node_unsafe_block_parser<'src>() -> impl Parser<'src, &'src [Token], Node
     .map(|(reason, unsafe_block)| Node::Unsafe(UnsafeNode { reason, children: unsafe_block } ))
 }
 
-// pub fn node_text_autoclose_parser<'src>() -> impl Parser<'src, &'src [Token], Node, extra::Err<Rich<'src, Token>>> {
-//   just(Token::StartTag)
-//     .ignore_then(just(Token::Ident(String::from("Text"))))
-//     .ignore_then(just(Token::Ident(String::from("value"))))
-//     .ignore_then(just(Token::AttrAssign))
-//     .ignore_then(select! { Token::ValueString(value) => value.as_str()[1..(value.len()-1)].to_string() })
-//     .then_ignore(just(Token::EndAutoclosingTag))
-//     .map(|value| Node::Text(TextNode {
-//       value
-//     }))
-// }
+pub fn node_else_if_block_parser<'src>(node: impl Parser<'src, &'src [Token], Node, extra::Err<Rich<'src, Token>>> + Clone) -> impl Parser<'src, &'src [Token], IfNode, extra::Err<Rich<'src, Token>>> {
+  just(Token::OpenElseIf)
+    .ignore_then(just(Token::IfCondition))
+    .ignore_then(just(Token::AttrAssign))
+    .ignore_then(attr_simple_expression_value_parser())
+    .then_ignore(just(Token::EndTag))
+    .then(node.repeated().collect::<Vec<Node>>())
+    .then_ignore(select! { Token::CloseTag(_) => () })
+    .map(|(condition, then_children): (SimpleExpression, Vec<Node>)| IfNode {
+      condition,
+      then_children,
+      else_if_children: vec![],
+      else_child: None,
+    })
+}
+
+pub fn node_if_block_parser<'src>(node: impl Parser<'src, &'src [Token], Node, extra::Err<Rich<'src, Token>>> + Clone) -> impl Parser<'src, &'src [Token], Node, extra::Err<Rich<'src, Token>>> {
+  let else_if = node_else_if_block_parser(node.clone());
+
+  let else_branch = just(Token::OpenElse)
+    .ignore_then(just(Token::EndTag))
+    .ignore_then(node.clone().repeated().collect::<Vec<Node>>())
+    .then_ignore(select! { Token::CloseTag(_) => () });
+
+  just(Token::OpenIf)
+    .ignore_then(just(Token::IfCondition))
+    .ignore_then(just(Token::AttrAssign))
+    .ignore_then(attr_simple_expression_value_parser())
+    .then_ignore(just(Token::EndTag))
+    .then(node.repeated().collect::<Vec<Node>>())
+    .then_ignore(select! { Token::CloseTag(_) => () })
+    .then(else_if.repeated().collect::<Vec<IfNode>>())
+    .then(else_branch.or_not())
+    .map(|(((condition, then_children), else_if_children), else_child)| Node::If(IfNode {
+      condition,
+      then_children,
+      else_if_children,
+      else_child,
+    }))
+}
+
+pub fn node_each_block_parser<'src>(
+  node: impl Parser<'src, &'src [Token], Node, extra::Err<Rich<'src, Token>>> + Clone,
+) -> impl Parser<'src, &'src [Token], Node, extra::Err<Rich<'src, Token>>> {
+  let index_alias = just(Token::IndexAs)
+    .ignore_then(just(Token::AttrAssign))
+    .ignore_then(select! { Token::Ident(name) => SimpleExpression::Var(name) })
+    .or_not();
+
+  just(Token::OpenEach)
+    .ignore_then(just(Token::EachCollection))
+    .ignore_then(just(Token::AttrAssign))
+    .ignore_then(attr_simple_expression_value_parser())
+    .then_ignore(just(Token::As))
+    .then_ignore(just(Token::AttrAssign))
+    .then(select! { Token::Ident(name) => name })
+    .then(index_alias)
+    .then_ignore(just(Token::EndTag))
+    .then(node.repeated().collect::<Vec<Node>>())
+    .then_ignore(select! { Token::CloseTag(_) => () })
+    .map(|(((collection, alias), index_alias), children)| Node::Each(EachNode {
+      collection,
+      alias,
+      index_alias,
+      children,
+    }))
+}
 
 pub fn node_parser<'src>() -> impl Parser<'src, &'src [Token], Node, extra::Err<Rich<'src, Token>>> {
   recursive::<_, _, extra::Err<Rich<'src, Token>>, _, _>(|node| {
 
     let attrs = attr_parser().repeated().collect::<Vec<Attr>>().boxed();
+
+    let if_node = node_if_block_parser(node.clone());
+    let each_node = node_each_block_parser(node.clone());
 
     let autoclosing = just(Token::StartTag)
       .ignore_then(select! { Token::Ident(name) => name })
@@ -81,6 +140,8 @@ pub fn node_parser<'src>() -> impl Parser<'src, &'src [Token], Node, extra::Err<
       .or(node_literal_static_parser().boxed())
       .or(slot_node.boxed())
       .or(unsafe_node.boxed())
+      .or(if_node.boxed())
+      .or(each_node.boxed())
   })
 }
 
@@ -119,7 +180,7 @@ fn page_def_parser<'src>() -> impl Parser<'src, &'src [Token], Declaration, extr
     .map(|((name, props), body)| Declaration::Page { 
       name, 
       props, 
-      body: body
+      body
     })
 }
 
@@ -131,7 +192,7 @@ fn component_def_parser<'src>() -> impl Parser<'src, &'src [Token], Declaration,
     .map(|((name, props), body)| Declaration::Component { 
       name, 
       props, 
-      body: body
+      body
     })
 }
 

@@ -1,5 +1,5 @@
 use chumsky::Parser;
-use origami_runtime::{Attr, AttrValue, Body, ComponentNode, Declaration, ExpressionNode, LiteralNode, Node, OriFile, Prop, SimpleExpression, SlotNode, Static, TextNode, Token, UnsafeNode};
+use origami_runtime::{Attr, AttrValue, Body, ComponentNode, Declaration, EachNode, ExpressionNode, IfNode, Node, OriFile, Prop, SimpleExpression, SlotNode, Static, Token, UnsafeNode};
 
 use crate::{
   attrs::{attr_parser, attr_simple_expression_dot_value_parser, attr_simple_expression_var_value_parser, attr_static_int_value_parser, attr_static_string_value_parser, attr_unsafe_value_parser},
@@ -434,42 +434,6 @@ fn parse_template_with_expr() {
   ));
 }
 
-fn parse_template_with_static() {
-  let tokens = vec![
-    Token::StartTag, 
-      Token::Ident(String::from("Column")), 
-      Token::Ident(String::from("width")), 
-        Token::AttrAssign,
-        Token::ValueNumber(String::from("123")),
-    Token::EndTag,
-
-    Token::ValueString(String::from("value string")),
-    Token::ValueNumber(String::from("123")),
-    Token::ValueNumber(String::from("1.23")),
-
-    Token::CloseTag(String::from("Column"))
-  ];
-
-  let result = node_parser().parse(&tokens).into_result();
-
-  assert_eq!(result, Ok(
-    Node::Component(ComponentNode {
-      name: String::from("Column"),
-      attrs: vec![
-        Attr { 
-          name: String::from("width"), 
-          value: AttrValue::Literal(Static::NumberInt(123i64)),
-        },
-      ],
-      children: vec![
-        Node::Literal(LiteralNode { value: Static::String(String::from("value string")) }),
-        Node::Literal(LiteralNode { value: Static::NumberInt(123i64) }),
-        Node::Literal(LiteralNode { value: Static::NumberFloat(1.23f64) })
-      ]
-    })
-  ));
-}
-
 #[test]
 fn parse_template_with_slot() {
   let tokens = vec![
@@ -542,51 +506,262 @@ fn parse_template_with_unsafe_block() {
   ));
 }
 
-// #[test]
-// fn parse_template_text_tag_autoclose() {
-//   let tokens = vec![
-//     Token::StartTag, 
-//       Token::Ident(String::from("Text")), 
-//       Token::Ident(String::from("value")), 
-//         Token::AttrAssign,
-//         Token::ValueString(String::from("This is a content")),
-//     Token::EndAutoclosingTag
-//   ];
+// --- <if ...> component parser ---
 
-//   let result = node_parser().parse(&tokens).into_result();
+#[test]
+fn parse_if_then_component() {
+  let tokens = vec![
+    Token::OpenIf,
+      Token::IfCondition,
+      Token::AttrAssign,
+      Token::OpenExpr, 
+        Token::Ident(String::from("my")), 
+        Token::PeriodSeparator, 
+        Token::Ident(String::from("predicate")), 
+        Token::PeriodSeparator, 
+        Token::Ident(String::from("expression")), 
+      Token::CloseExpr,
+    Token::EndTag,
+      Token::StartTag,
+        Token::Ident(String::from("Box")),
+      Token::EndAutoclosingTag,
+    Token::CloseTag(String::from("if"))
+  ];
 
-//   assert_eq!(result, Ok(
-//     Node::Text(TextNode {
-//       value: String::from("This is a content")
-//     })
-//   ));
-// }
+  let result = node_parser().parse(&tokens).into_result();
 
-// #[test]
-// fn parse_template_text_tag_open_close() {
-//   let tokens = vec![
-//     Token::StartTag, 
-//       Token::Ident(String::from("Text")), 
-//     Token::EndTag,
-//       Token::ValueString(String::from("This is a content")),
-//     Token::CloseTag(String::from("Text"))
-//   ];
+  assert_eq!(result, Ok(
+    Node::If(IfNode {
+      condition: SimpleExpression::Dot(
+        Box::new(SimpleExpression::Dot(
+          Box::new(SimpleExpression::Var(String::from("my"))), 
+          String::from("predicate")
+        )), 
+        String::from("expression")
+      ),
+      then_children: vec![
+        Node::Component(ComponentNode { 
+          name: String::from("Box"), 
+          attrs: vec![], 
+          children: vec![] 
+        })
+      ],
+      else_if_children: vec![],
+      else_child: None,
+    })
+  ));
+}
 
-//   let result = node_parser().parse(&tokens).into_result();
+#[test]
+fn parse_if_then_component_with_else() {
+  let tokens = vec![
+    Token::OpenIf,
+      Token::IfCondition,
+      Token::AttrAssign,
+      Token::OpenExpr, 
+        Token::Ident(String::from("my")), 
+        Token::PeriodSeparator, 
+        Token::Ident(String::from("predicate")), 
+        Token::PeriodSeparator, 
+        Token::Ident(String::from("expression")), 
+      Token::CloseExpr,
+    Token::EndTag,
 
-//   assert_eq!(result, Ok(
-//     Node::Component(ComponentNode {
-//       name: String::from("Text"),
-//       attrs: vec![],
-//       children: vec![
-//         Node::Literal(LiteralNode { 
-//           value: String::from("This is a content")
-//         })
-//       ]
-//     })
-//   ));
-// }
+      Token::StartTag,
+        Token::Ident(String::from("Box")),
+      Token::EndAutoclosingTag,
 
+    Token::CloseTag(String::from("if")),
+    Token::OpenElse,
+    Token::EndTag,
+
+      Token::StartTag,
+        Token::Ident(String::from("Box")),
+      Token::EndAutoclosingTag,
+
+    Token::CloseTag(String::from("else"))
+  ];
+
+  let result = node_parser().parse(&tokens).into_result();
+
+  
+  assert_eq!(result, Ok(
+    Node::If(IfNode {
+      condition: SimpleExpression::Dot(
+        Box::new(SimpleExpression::Dot(
+          Box::new(SimpleExpression::Var(String::from("my"))), 
+          String::from("predicate")
+        )), 
+        String::from("expression")
+      ),
+      then_children: vec![
+        Node::Component(ComponentNode {
+          name: String::from("Box"),
+          attrs: vec![],
+          children: vec![]
+        })
+      ],
+      else_if_children: vec![],
+      else_child: Option::Some(vec![
+        Node::Component(ComponentNode {
+          name: String::from("Box"),
+          attrs: vec![],
+          children: vec![]
+        })
+      ]),
+    })
+  ));
+}
+
+#[test]
+fn parse_if_then_component_with_elseif_and_else() {
+  let tokens = vec![
+    Token::OpenIf,
+      Token::IfCondition,
+      Token::AttrAssign,
+      Token::OpenExpr, 
+        Token::Ident(String::from("my")), 
+        Token::PeriodSeparator, 
+        Token::Ident(String::from("predicate")), 
+        Token::PeriodSeparator, 
+        Token::Ident(String::from("expression")), 
+      Token::CloseExpr,
+    Token::EndTag,
+
+      Token::StartTag,
+        Token::Ident(String::from("Box")),
+      Token::EndAutoclosingTag,
+
+    Token::CloseTag(String::from("if")),
+
+    // first elseIf
+
+    Token::OpenElseIf,
+      Token::IfCondition,
+        Token::AttrAssign,
+        Token::OpenExpr, 
+          Token::Ident(String::from("my")), 
+          Token::PeriodSeparator, 
+          Token::Ident(String::from("predicate")), 
+          Token::PeriodSeparator, 
+          Token::Ident(String::from("expression")), 
+          Token::PeriodSeparator, 
+          Token::Ident(String::from("elseif1")), 
+        Token::CloseExpr,
+      Token::EndTag,
+
+      Token::StartTag,
+        Token::Ident(String::from("Box")),
+      Token::EndAutoclosingTag,
+
+      Token::StartTag,
+        Token::Ident(String::from("Box")),
+      Token::EndAutoclosingTag,
+
+    Token::CloseTag(String::from("elseIf")),
+
+    // second elseIf
+    Token::OpenElseIf,
+      Token::IfCondition,
+        Token::AttrAssign,
+        Token::OpenExpr, 
+          Token::Ident(String::from("my")), 
+          Token::PeriodSeparator, 
+          Token::Ident(String::from("predicate")), 
+          Token::PeriodSeparator, 
+          Token::Ident(String::from("expression")), 
+          Token::PeriodSeparator, 
+          Token::Ident(String::from("elseif2")), 
+        Token::CloseExpr,
+      Token::EndTag,
+
+      Token::StartTag,
+        Token::Ident(String::from("Box")),
+      Token::EndAutoclosingTag,
+
+      Token::StartTag,
+        Token::Ident(String::from("Box")),
+      Token::EndAutoclosingTag,
+
+    Token::CloseTag(String::from("elseIf")),
+
+    // else
+    Token::OpenElse,
+    Token::EndTag,
+
+      Token::StartTag,
+        Token::Ident(String::from("Box")),
+      Token::EndAutoclosingTag,
+
+    Token::CloseTag(String::from("else"))
+  ];
+
+  let result = node_parser().parse(&tokens).into_result();
+
+  assert_eq!(result, Ok(
+    Node::If(IfNode {
+      condition: SimpleExpression::Dot(
+        Box::new(SimpleExpression::Dot(
+          Box::new(SimpleExpression::Var(String::from("my"))), 
+          String::from("predicate")
+        )), 
+        String::from("expression")
+      ),
+      then_children: vec![
+        Node::Component(ComponentNode {
+          name: String::from("Box"),
+          attrs: vec![],
+          children: vec![]
+        })
+      ],
+      else_if_children: vec![
+        IfNode {
+          condition: SimpleExpression::Dot(
+            Box::new(SimpleExpression::Dot(
+              Box::new(SimpleExpression::Dot(
+                Box::new(SimpleExpression::Var(String::from("my"))), 
+                String::from("predicate")
+              )), 
+              String::from("expression")
+            )), 
+            String::from("elseif1")
+          ),
+          then_children: vec![
+            Node::Component(ComponentNode { name: String::from("Box"), attrs: vec![], children: vec![] }),
+            Node::Component(ComponentNode { name: String::from("Box"), attrs: vec![], children: vec![] }),
+          ],
+          else_if_children: vec![],
+          else_child: None,
+        },
+        IfNode {
+          condition: SimpleExpression::Dot(
+            Box::new(SimpleExpression::Dot(
+              Box::new(SimpleExpression::Dot(
+                Box::new(SimpleExpression::Var(String::from("my"))), 
+                String::from("predicate")
+              )), 
+              String::from("expression")
+            )), 
+            String::from("elseif2")
+          ),
+          then_children: vec![
+            Node::Component(ComponentNode { name: String::from("Box"), attrs: vec![], children: vec![] }),
+            Node::Component(ComponentNode { name: String::from("Box"), attrs: vec![], children: vec![] }),
+          ],
+          else_if_children: vec![],
+          else_child: None,
+        },
+      ],
+      else_child: Option::Some(vec![
+        Node::Component(ComponentNode {
+          name: String::from("Box"),
+          attrs: vec![],
+          children: vec![]
+        })
+      ]),
+    })
+  ));
+}
 
 // --- declaration parsers ---
 
@@ -1059,4 +1234,114 @@ fn parse_attr_unsafe_value_missing_open_args() {
     Token::ValueString(String::from("\"reason\"")),
   ];
   assert!(attr_unsafe_value_parser().parse(&tokens).into_result().is_err());
+}
+
+// --- <each ...> parser ---
+
+#[test]
+fn parse_each_without_index_alias() {
+  let tokens = vec![
+    Token::OpenEach,
+      Token::EachCollection, Token::AttrAssign,
+      Token::OpenExpr, Token::Ident(String::from("books")), Token::CloseExpr,
+      Token::As, Token::AttrAssign, Token::Ident(String::from("book")),
+    Token::EndTag,
+      Token::StartTag, Token::Ident(String::from("Box")), Token::EndAutoclosingTag,
+    Token::CloseTag(String::from("each")),
+  ];
+
+  let result = node_parser().parse(&tokens).into_result();
+
+  assert_eq!(result, Ok(
+    Node::Each(EachNode {
+      collection: SimpleExpression::Var(String::from("books")),
+      alias: String::from("book"),
+      index_alias: None,
+      children: vec![
+        Node::Component(ComponentNode { name: String::from("Box"), attrs: vec![], children: vec![] }),
+      ],
+    })
+  ));
+}
+
+#[test]
+fn parse_each_with_index_alias() {
+  let tokens = vec![
+    Token::OpenEach,
+      Token::EachCollection, Token::AttrAssign,
+      Token::OpenExpr, Token::Ident(String::from("books")), Token::CloseExpr,
+      Token::As, Token::AttrAssign, Token::Ident(String::from("book")),
+      Token::IndexAs, Token::AttrAssign, Token::Ident(String::from("idx")),
+    Token::EndTag,
+      Token::StartTag, Token::Ident(String::from("Box")), Token::EndAutoclosingTag,
+    Token::CloseTag(String::from("each")),
+  ];
+
+  let result = node_parser().parse(&tokens).into_result();
+
+  assert_eq!(result, Ok(
+    Node::Each(EachNode {
+      collection: SimpleExpression::Var(String::from("books")),
+      alias: String::from("book"),
+      index_alias: Some(SimpleExpression::Var(String::from("idx"))),
+      children: vec![
+        Node::Component(ComponentNode { name: String::from("Box"), attrs: vec![], children: vec![] }),
+      ],
+    })
+  ));
+}
+
+#[test]
+fn parse_each_with_dot_collection() {
+  // collection può essere dot expression: {{page.books}}
+  let tokens = vec![
+    Token::OpenEach,
+      Token::EachCollection, Token::AttrAssign,
+      Token::OpenExpr,
+        Token::Ident(String::from("page")), Token::PeriodSeparator, Token::Ident(String::from("books")),
+      Token::CloseExpr,
+      Token::As, Token::AttrAssign, Token::Ident(String::from("book")),
+    Token::EndTag,
+      Token::StartTag, Token::Ident(String::from("Box")), Token::EndAutoclosingTag,
+    Token::CloseTag(String::from("each")),
+  ];
+
+  let result = node_parser().parse(&tokens).into_result();
+
+  assert_eq!(result, Ok(
+    Node::Each(EachNode {
+      collection: SimpleExpression::Dot(
+        Box::new(SimpleExpression::Var(String::from("page"))),
+        String::from("books"),
+      ),
+      alias: String::from("book"),
+      index_alias: None,
+      children: vec![
+        Node::Component(ComponentNode { name: String::from("Box"), attrs: vec![], children: vec![] }),
+      ],
+    })
+  ));
+}
+
+#[test]
+fn parse_each_missing_collection() {
+  let tokens = vec![
+    Token::OpenEach,
+      Token::As, Token::AttrAssign, Token::Ident(String::from("book")),
+    Token::EndTag,
+    Token::CloseTag(String::from("each")),
+  ];
+  assert!(node_parser().parse(&tokens).into_result().is_err());
+}
+
+#[test]
+fn parse_each_missing_alias() {
+  let tokens = vec![
+    Token::OpenEach,
+      Token::EachCollection, Token::AttrAssign,
+      Token::OpenExpr, Token::Ident(String::from("books")), Token::CloseExpr,
+    Token::EndTag,
+    Token::CloseTag(String::from("each")),
+  ];
+  assert!(node_parser().parse(&tokens).into_result().is_err());
 }

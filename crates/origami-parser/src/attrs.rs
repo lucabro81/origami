@@ -3,7 +3,7 @@ use origami_runtime::{Attr, AttrValue, SimpleExpression, Static, Token};
 
 pub fn attr_static_string_value_parser<'src>() -> impl Parser<'src, &'src [Token], Static, extra::Err<Rich<'src, Token>>> {
   select! { Token::ValueString(value) => value }
-    .map(|value| Static::String(value))
+    .map(Static::String)
 }
 
 pub fn attr_static_int_value_parser<'src>() -> impl Parser<'src, &'src [Token], Static, extra::Err<Rich<'src, Token>>> {
@@ -11,7 +11,7 @@ pub fn attr_static_int_value_parser<'src>() -> impl Parser<'src, &'src [Token], 
     .try_map(|value, span| {
       value.parse::<i64>().map_err(|_| Rich::custom(span, "invalid integer"))
     })
-    .map(|n| Static::NumberInt(n))
+    .map(Static::NumberInt)
 }
 
 pub fn attr_static_float_value_parser<'src>() -> impl Parser<'src, &'src [Token], Static, extra::Err<Rich<'src, Token>>> {
@@ -19,7 +19,7 @@ pub fn attr_static_float_value_parser<'src>() -> impl Parser<'src, &'src [Token]
     .try_map(|value, span| {
       value.parse::<f64>().map_err(|_| Rich::custom(span, "invalid float"))
     })
-    .map(|n| Static::NumberFloat(n))
+    .map(Static::NumberFloat)
 }
 
 pub fn attr_static_value_parser<'src>() -> impl Parser<'src, &'src [Token], Static, extra::Err<Rich<'src, Token>>> {
@@ -30,13 +30,13 @@ pub fn attr_static_value_parser<'src>() -> impl Parser<'src, &'src [Token], Stat
 
 pub fn attr_literal_value_parser<'src>() -> impl Parser<'src, &'src [Token], AttrValue, extra::Err<Rich<'src, Token>>> {
   attr_static_value_parser()
-    .map(|value| AttrValue::Literal(value))
+    .map(AttrValue::Literal)
 }
 
 pub fn attr_simple_expression_var_value_parser<'src>() -> impl Parser<'src, &'src [Token], SimpleExpression, extra::Err<Rich<'src, Token>>> {
   just(Token::OpenExpr)
     .ignore_then(select! { Token::Ident(expr) => expr })
-    .map(|expr| SimpleExpression::Var(expr))
+    .map(SimpleExpression::Var)
     .then_ignore(just(Token::CloseExpr))
 }
 
@@ -67,7 +67,7 @@ pub fn attr_simple_expression_value_parser<'src>() -> impl Parser<'src, &'src [T
 
 pub fn attr_dynamic_value_parser<'src>() -> impl Parser<'src, &'src [Token], AttrValue, extra::Err<Rich<'src, Token>>> {
   attr_simple_expression_value_parser()
-    .map(|value| AttrValue::Dynamic(value))
+    .map(AttrValue::Dynamic)
 }
 
 pub fn attr_unsafe_value_parser<'src>() -> impl Parser<'src, &'src [Token], AttrValue, extra::Err<Rich<'src, Token>>> {

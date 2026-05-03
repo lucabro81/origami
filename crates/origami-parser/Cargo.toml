@@ -9,3 +9,4 @@ origami-runtime.workspace = true
 origami-lexer.workspace = true
 typed-arena.workspace = true
 chumsky = "0.10"
+miette.workspace = true

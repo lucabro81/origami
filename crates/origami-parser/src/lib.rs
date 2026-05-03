@@ -3,8 +3,37 @@ pub mod attrs;
 
 use crate::{attrs::{attr_parser, attr_simple_expression_value_parser, attr_static_value_parser}, props::props_parser};
 
-use chumsky::{prelude::*};
-use origami_runtime::{Attr, Body, ComponentNode, Declaration, EachNode, ExpressionNode, IfNode, LiteralNode, Node, OriFile, SimpleExpression, SlotNode, Token, UnsafeNode};
+use std::sync::Arc;
+
+use chumsky::prelude::*;
+use origami_runtime::{
+    codes, Attr, Body, ComponentNode, Declaration, EachNode, ExpressionNode, IfNode, LiteralNode,
+    Node, OriFile, ParseError, SimpleExpression, SlotNode, Token, UnsafeNode,
+};
+
+/// Convert the token-stream slice into an [`OriFile`] AST, or return a list of
+/// [`ParseError`]s carrying miette-compatible spans and source info.
+pub fn parse(tokens: &[Token], filename: &str, src: Arc<String>) -> Result<OriFile, Vec<ParseError>> {
+    let result = ori_file_parser().parse(tokens);
+    if result.errors().next().is_none() {
+        Ok(result.into_output().expect("no errors but also no output"))
+    } else {
+        let named = miette::NamedSource::new(filename, src);
+        let errors = result
+            .errors()
+            .map(|e| {
+                let span = e.span();
+                ParseError::UnexpectedToken {
+                    code: codes::P001.code,
+                    message: codes::P001.message,
+                    span: miette::SourceSpan::from(span.start..span.end),
+                    src: named.clone(),
+                }
+            })
+            .collect();
+        Err(errors)
+    }
+}
 
 pub fn node_expr_parser<'src>() -> impl Parser<'src, &'src [Token], Node, extra::Err<Rich<'src, Token>>> {
   attr_simple_expression_value_parser()

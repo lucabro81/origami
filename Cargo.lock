@@ -682,6 +682,7 @@ name = "origami-parser"
 version = "0.1.0"
 dependencies = [
  "chumsky",
+ "miette",
  "origami-lexer",
  "origami-runtime",
  "typed-arena",

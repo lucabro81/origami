@@ -8,5 +8,6 @@ pub use tokens::Token;
 pub use ast::*;
 
 pub use errors::LexError;
+pub use errors::ParseError;
 pub use position::Position;
 

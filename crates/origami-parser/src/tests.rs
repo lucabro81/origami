@@ -1,9 +1,11 @@
+use std::sync::Arc;
+
 use chumsky::Parser;
-use origami_runtime::{Attr, AttrValue, Body, ComponentNode, Declaration, EachNode, ExpressionNode, IfNode, Node, OriFile, Prop, SimpleExpression, SlotNode, Static, Token, UnsafeNode};
+use origami_runtime::{Attr, AttrValue, Body, ComponentNode, Declaration, EachNode, ExpressionNode, IfNode, Node, OriFile, ParseError, Prop, SimpleExpression, SlotNode, Static, Token, UnsafeNode};
 
 use crate::{
   attrs::{attr_parser, attr_simple_expression_dot_value_parser, attr_simple_expression_var_value_parser, attr_static_int_value_parser, attr_static_string_value_parser, attr_unsafe_value_parser},
-  body_parser, declaration_parser, ori_file_parser, props::prop_parser, props_parser, node_parser,
+  body_parser, declaration_parser, ori_file_parser, props::prop_parser, props_parser, node_parser, parse,
 };
 
 // --- props parser ---
@@ -1344,4 +1346,76 @@ fn parse_each_missing_alias() {
     Token::CloseTag(String::from("each")),
   ];
   assert!(node_parser().parse(&tokens).into_result().is_err());
+}
+
+// --- pub fn parse() ---
+
+#[test]
+fn parse_returns_ori_file_on_valid_tokens() {
+    let tokens = vec![
+        Token::KwLayout,
+        Token::Ident(String::from("Default")),
+        Token::OpenBody,
+        Token::Divider,
+        Token::CloseBody,
+        Token::Eof,
+    ];
+    let src = Arc::new(String::from("layout Default {}"));
+    let result = parse(&tokens, "test.ori", src);
+    assert_eq!(result, Ok(OriFile {
+        declarations: vec![
+            Declaration::Layout {
+                name: String::from("Default"),
+                body: Body { logic_block: String::from(""), template: vec![] },
+            }
+        ]
+    }));
+}
+
+#[test]
+fn parse_returns_parse_errors_on_invalid_tokens() {
+    // bare Ident with no keyword — structurally invalid
+    let tokens = vec![
+        Token::Ident(String::from("Card")),
+        Token::Eof,
+    ];
+    let src = Arc::new(String::from("Card"));
+    let result = parse(&tokens, "test.ori", src);
+    assert!(result.is_err());
+    let errors = result.unwrap_err();
+    assert!(!errors.is_empty());
+}
+
+#[test]
+fn parse_error_carries_p001_code() {
+    let tokens = vec![
+        Token::Ident(String::from("Card")),
+        Token::Eof,
+    ];
+    let src = Arc::new(String::from("Card"));
+    let errors = parse(&tokens, "test.ori", src).unwrap_err();
+    // every error emitted by the generic conversion must use code P001
+    for e in &errors {
+        match e {
+            ParseError::UnexpectedToken { code, .. } => assert_eq!(*code, "P001"),
+            _ => panic!("expected UnexpectedToken variant"),
+        }
+    }
+}
+
+#[test]
+fn parse_error_has_named_source() {
+    let tokens = vec![Token::Eof]; // empty file — no declarations, but Eof alone is valid
+    let src = Arc::new(String::from(""));
+    // valid empty file should parse fine
+    let result = parse(&tokens, "empty.ori", src);
+    assert!(result.is_ok());
+}
+
+#[test]
+fn parse_empty_file_is_valid() {
+    let tokens = vec![Token::Eof];
+    let src = Arc::new(String::from(""));
+    let result = parse(&tokens, "empty.ori", src);
+    assert_eq!(result, Ok(OriFile { declarations: vec![] }));
 }

@@ -41,6 +41,7 @@ Early development. Not usable yet.
 | Crate | README | Role |
 |-------|--------|------|
 | `origami-lexer` | [crates/origami-lexer](crates/origami-lexer/README.md) | `.ori` source → `Vec<Token>` |
+| `origami-parser` | [crates/origami-parser](crates/origami-parser/README.md) | `Vec<Token>` → `OriFile` AST |
 
 ## Development
 

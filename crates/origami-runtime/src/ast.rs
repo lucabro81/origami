@@ -67,7 +67,7 @@ pub struct LiteralNode {
 /// Conditional node `<if condition={expr}>…</if>` with optional else and else-if branches.
 #[derive(Debug, Clone, PartialEq)]
 pub struct IfNode {
-    pub condition: String,
+    pub condition: SimpleExpression,
     pub then_children: Vec<Node>,
     pub else_if_children: Vec<IfNode>,
     pub else_child: Option<Vec<Node>>,

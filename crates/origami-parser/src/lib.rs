@@ -62,6 +62,7 @@ pub fn node_if_block_parser<'src>(node: impl Parser<'src, &'src [Token], Node, e
     .ignore_then(attr_simple_expression_value_parser())
     .then_ignore(just(Token::EndTag))
     .then(node.repeated().collect::<Vec<Node>>())
+    // closes </if> — elseIf and else follow as siblings outside this tag, not nested inside it
     .then_ignore(select! { Token::CloseTag(_) => () })
     .then(else_if.repeated().collect::<Vec<IfNode>>())
     .then(else_branch.or_not())
@@ -103,6 +104,7 @@ pub fn node_each_block_parser<'src>(
 pub fn node_parser<'src>() -> impl Parser<'src, &'src [Token], Node, extra::Err<Rich<'src, Token>>> {
   recursive::<_, _, extra::Err<Rich<'src, Token>>, _, _>(|node| {
 
+    // boxed to make the type Clone-able — shared between autoclosing and open_close
     let attrs = attr_parser().repeated().collect::<Vec<Attr>>().boxed();
 
     let if_node = node_if_block_parser(node.clone());
@@ -147,6 +149,7 @@ pub fn node_parser<'src>() -> impl Parser<'src, &'src [Token], Node, extra::Err<
 
 fn body_parser<'src>() -> impl Parser<'src, &'src [Token], Body, extra:: Err<Rich<'src, Token>>> {
   just(Token::OpenBody)
+    // or_not: logic block absent when no code precedes ----
     .ignore_then(select! { Token::LogicBlock(block) => block}.or_not())
     .then_ignore(just(Token::Divider))
     .then(

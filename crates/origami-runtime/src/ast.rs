@@ -1,7 +1,9 @@
+use miette::SourceSpan;
+
 #[derive(Debug, PartialEq)]
 pub struct Prop {
     pub name: String,
-    pub type_str: String
+    pub type_str: String,
 }
 
 #[derive(Debug, PartialEq)]
@@ -13,8 +15,8 @@ pub enum Declaration {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum SimpleExpression {
-    Var(String), // es.: {{simpleValue}}
-    Dot(Box<SimpleExpression>, String) // es.: {{book.author.id}}
+    Var(String),
+    Dot(Box<SimpleExpression>, String),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -26,7 +28,7 @@ pub enum Static {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum AttrValue {
-    Literal(Static), 
+    Literal(Static),
     Dynamic(SimpleExpression),
     UnsafeValue { value: Static, reason: String },
 }
@@ -34,43 +36,45 @@ pub enum AttrValue {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Attr {
     pub name: String,
-    pub value: AttrValue
+    pub value: AttrValue,
+    pub span: SourceSpan,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ComponentNode {
-    /// Component name (e.g. `"Column"`, `"Text"`).
     pub name: String,
-    /// attrs declared on the opening tag.
     pub attrs: Vec<Attr>,
-    /// Children: present only if the tag is not self-closing.
     pub children: Vec<Node>,
+    pub span: SourceSpan,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct TextNode {
-    /// The raw text.
     pub value: String,
+    pub span: SourceSpan,
 }
 
 /// Interpolation of a TypeScript expression in the template: `{{expr}}`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExpressionNode {
     pub value: SimpleExpression,
+    pub span: SourceSpan,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct LiteralNode {
     pub value: Static,
+    pub span: SourceSpan,
 }
 
-/// Conditional node `<if condition={expr}>…</if>` with optional else and else-if branches.
+/// Conditional node `<if condition={expr}>…</if>`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct IfNode {
     pub condition: SimpleExpression,
     pub then_children: Vec<Node>,
     pub else_if_children: Vec<IfNode>,
     pub else_child: Option<Vec<Node>>,
+    pub span: SourceSpan,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -79,16 +83,20 @@ pub struct EachNode {
     pub alias: String,
     pub index_alias: Option<SimpleExpression>,
     pub children: Vec<Node>,
+    pub span: SourceSpan,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct UnsafeNode {
     pub reason: String,
     pub children: String,
+    pub span: SourceSpan,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct SlotNode {}
+pub struct SlotNode {
+    pub span: SourceSpan,
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Node {
@@ -104,18 +112,18 @@ pub enum Node {
     Each(EachNode),
     /// Unsafe escape-hatch block `<unsafe>`.
     Unsafe(UnsafeNode),
-    /// Placeholder in a component in which inject children. TBD: it's really needed? can be solved in a react way or simpler?
+    /// Placeholder slot for injecting children.
     Slot(SlotNode),
-    Literal(LiteralNode)
+    Literal(LiteralNode),
 }
 
 #[derive(Debug, PartialEq)]
 pub struct Body {
     pub logic_block: String,
-    pub template: Vec<Node>
+    pub template: Vec<Node>,
 }
 
 #[derive(Debug, PartialEq)]
-pub struct OriFile { 
+pub struct OriFile {
     pub declarations: Vec<Declaration>,
 }

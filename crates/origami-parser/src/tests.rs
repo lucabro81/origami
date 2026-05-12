@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use chumsky::Parser;
+use miette::SourceSpan;
 use origami_runtime::{Attr, AttrValue, Body, ComponentNode, Declaration, EachNode, ExpressionNode, IfNode, Node, OriFile, ParseError, Prop, SimpleExpression, SlotNode, Static, Token, UnsafeNode};
 
 use crate::{
@@ -8,13 +9,18 @@ use crate::{
   body_parser, declaration_parser, ori_file_parser, props::prop_parser, props_parser, node_parser, parse,
 };
 
+/// Build a SourceSpan from token-index offset and length.
+fn sp(offset: usize, length: usize) -> SourceSpan {
+    SourceSpan::new(miette::SourceOffset::from(offset), length)
+}
+
 // --- props parser ---
 
 #[test]
 fn parse_prop() {
   let tokens = vec![
-    Token::Ident(String::from("book")), 
-    Token::TypeAssign, 
+    Token::Ident(String::from("book")),
+    Token::TypeAssign,
     Token::Ident(String::from("BookData"))
   ];
   let result = prop_parser().parse(&tokens).into_result();
@@ -34,27 +40,27 @@ fn parse_prop_missing_type_assign() {
 fn parse_prop_missing_type() {
     let tokens = vec![
       Token::Ident(String::from("book")),
-      Token::TypeAssign, 
+      Token::TypeAssign,
     ];
     assert!(prop_parser().parse(&tokens).into_result().is_err());
 }
- 
+
 #[test]
 fn parse_prop_mistokened_name() {
     let tokens = vec![
-      Token::TypeAssign, 
-      Token::TypeAssign, 
+      Token::TypeAssign,
+      Token::TypeAssign,
       Token::Ident(String::from("BookData"))
-    ];      
+    ];
     assert!(prop_parser().parse(&tokens).into_result().is_err());
 }
 
 #[test]
 fn parse_prop_mistokened_type() {
     let tokens = vec![
-      Token::Ident(String::from("book")), 
+      Token::Ident(String::from("book")),
       Token::TypeAssign,
-      Token::TypeAssign, 
+      Token::TypeAssign,
     ];
     assert!(prop_parser().parse(&tokens).into_result().is_err());
 }
@@ -62,13 +68,13 @@ fn parse_prop_mistokened_type() {
 #[test]
 fn parse_prop_with_parenthesis() {
   let tokens = vec![
-    Token::OpenArgs, 
-    Token::Ident(String::from("book")), 
-    Token::TypeAssign, 
-    Token::Ident(String::from("BookData")), 
+    Token::OpenArgs,
+    Token::Ident(String::from("book")),
+    Token::TypeAssign,
+    Token::Ident(String::from("BookData")),
     Token::CloseArgs
   ];
-    
+
   let result = props_parser().parse(&tokens).into_result();
   assert_eq!(result, Ok(vec![Prop { name: String::from("book"), type_str: String::from("BookData") }]));
 }
@@ -76,20 +82,20 @@ fn parse_prop_with_parenthesis() {
 #[test]
 fn parse_props_with_parenthesis() {
   let tokens = vec![
-    Token::OpenArgs, 
-    Token::Ident(String::from("book")), 
-    Token::TypeAssign, 
-    Token::Ident(String::from("BookData")), 
+    Token::OpenArgs,
+    Token::Ident(String::from("book")),
+    Token::TypeAssign,
+    Token::Ident(String::from("BookData")),
     Token::CommaSeparator,
-    Token::Ident(String::from("author")), 
-    Token::TypeAssign, 
-    Token::Ident(String::from("AuthorData")), 
+    Token::Ident(String::from("author")),
+    Token::TypeAssign,
+    Token::Ident(String::from("AuthorData")),
     Token::CloseArgs
   ];
-    
+
   let result = props_parser().parse(&tokens).into_result();
   assert_eq!(result, Ok(vec![
-    Prop { name: String::from("book"), type_str: String::from("BookData") }, 
+    Prop { name: String::from("book"), type_str: String::from("BookData") },
     Prop { name: String::from("author"), type_str: String::from("AuthorData") }
   ]));
 }
@@ -99,9 +105,9 @@ fn parse_props_with_parenthesis() {
 #[test]
 fn parse_simple_autoclosing_tag() {
   let tokens = vec![
-    Token::StartTag, 
-    Token::Ident(String::from("Box")), 
-    Token::EndAutoclosingTag
+    Token::StartTag,       // 0
+    Token::Ident(String::from("Box")), // 1
+    Token::EndAutoclosingTag           // 2
   ];
 
   let result = node_parser().parse(&tokens).into_result();
@@ -110,41 +116,41 @@ fn parse_simple_autoclosing_tag() {
     Node::Component(ComponentNode {
       name: String::from("Box"),
       attrs: vec![],
-      children: vec![]
+      children: vec![],
+      span: sp(0, 3),
     })
   ));
-
 }
 
 #[test]
 fn parse_autoclosing_tag_with_attrs() {
   let tokens = vec![
-    Token::StartTag, 
-    Token::Ident(String::from("Box")), 
+    Token::StartTag,
+    Token::Ident(String::from("Box")),
 
-    Token::Ident(String::from("width")), 
+    Token::Ident(String::from("width")),
       Token::AttrAssign,
       Token::ValueNumber(String::from("123")),
 
-    Token::Ident(String::from("height")), 
+    Token::Ident(String::from("height")),
       Token::AttrAssign,
       Token::ValueNumber(String::from("32.1")),
 
-    Token::Ident(String::from("title")), 
+    Token::Ident(String::from("title")),
       Token::AttrAssign,
       Token::ValueString(String::from("\"Un cavaliere per l'affascinante spia\"")),
 
-    Token::Ident(String::from("author")), 
+    Token::Ident(String::from("author")),
       Token::AttrAssign,
-      Token::OpenExpr, 
-            Token::Ident(String::from("book")), 
-            Token::PeriodSeparator, 
-            Token::Ident(String::from("author")), 
+      Token::OpenExpr,
+            Token::Ident(String::from("book")),
+            Token::PeriodSeparator,
+            Token::Ident(String::from("author")),
       Token::CloseExpr,
 
-    Token::Ident(String::from("size")), 
+    Token::Ident(String::from("size")),
       Token::AttrAssign,
-      Token::OpenExpr, 
+      Token::OpenExpr,
         Token::Unsafe,
           Token::OpenArgs,
             Token::ValueNumber(String::from("42")),
@@ -162,49 +168,35 @@ fn parse_autoclosing_tag_with_attrs() {
     Node::Component(ComponentNode {
       name: String::from("Box"),
       attrs: vec![
-        Attr { 
-          name: String::from("width"), 
-          value: AttrValue::Literal(Static::NumberInt(123i64)),
-        },
-        Attr { 
-          name: String::from("height"), 
-          value: AttrValue::Literal(Static::NumberFloat(32.1f64))
-        },
-        Attr { 
-          name: String::from("title"), 
-          value: AttrValue::Literal(Static::String(String::from("\"Un cavaliere per l'affascinante spia\"")))
-        },
-        Attr { 
-          name: String::from("author"), 
+        Attr { name: String::from("width"),  value: AttrValue::Literal(Static::NumberInt(123i64)), span: sp(2, 3) },
+        Attr { name: String::from("height"), value: AttrValue::Literal(Static::NumberFloat(32.1f64)), span: sp(5, 3) },
+        Attr { name: String::from("title"),  value: AttrValue::Literal(Static::String(String::from("\"Un cavaliere per l'affascinante spia\""))), span: sp(8, 3) },
+        Attr {
+          name: String::from("author"),
           value: AttrValue::Dynamic(
-            SimpleExpression::Dot(
-              Box::new(SimpleExpression::Var(String::from("book"))), 
-              String::from("author")
-            )
-          ) 
+            SimpleExpression::Dot(Box::new(SimpleExpression::Var(String::from("book"))), String::from("author"))
+          ),
+          span: sp(11, 7),
         },
-        Attr { 
-          name: String::from("size"), 
-          value: AttrValue::UnsafeValue {
-            value: Static::NumberInt(42),
-            reason: String::from("\"needed for legacy API\""),
-          }
-        }
-        
+        Attr {
+          name: String::from("size"),
+          value: AttrValue::UnsafeValue { value: Static::NumberInt(42), reason: String::from("\"needed for legacy API\"") },
+          span: sp(18, 10),
+        },
       ],
-      children: vec![]
+      children: vec![],
+      span: sp(0, 29),
     })
   ));
-
 }
 
 #[test]
 fn parse_simple_tag() {
   let tokens = vec![
-    Token::StartTag, 
-    Token::Ident(String::from("Box")), 
-    Token::EndTag,
-    Token::CloseTag(String::from("Box"))
+    Token::StartTag,                   // 0
+    Token::Ident(String::from("Box")), // 1
+    Token::EndTag,                     // 2
+    Token::CloseTag(String::from("Box")) // 3
   ];
 
   let result = node_parser().parse(&tokens).into_result();
@@ -213,41 +205,41 @@ fn parse_simple_tag() {
     Node::Component(ComponentNode {
       name: String::from("Box"),
       attrs: vec![],
-      children: vec![]
+      children: vec![],
+      span: sp(0, 4),
     })
   ));
-
 }
 
 #[test]
 fn parse_simple_tag_with_attrs() {
   let tokens = vec![
-    Token::StartTag, 
-      Token::Ident(String::from("Box")), 
+    Token::StartTag,
+      Token::Ident(String::from("Box")),
 
-      Token::Ident(String::from("width")), 
+      Token::Ident(String::from("width")),
         Token::AttrAssign,
         Token::ValueNumber(String::from("123")),
 
-      Token::Ident(String::from("height")), 
+      Token::Ident(String::from("height")),
         Token::AttrAssign,
         Token::ValueNumber(String::from("32.1")),
 
-      Token::Ident(String::from("title")), 
+      Token::Ident(String::from("title")),
         Token::AttrAssign,
         Token::ValueString(String::from("\"Un cavaliere per l'affascinante spia\"")),
 
-      Token::Ident(String::from("author")), 
+      Token::Ident(String::from("author")),
         Token::AttrAssign,
-        Token::OpenExpr, 
-          Token::Ident(String::from("book")), 
-          Token::PeriodSeparator, 
-          Token::Ident(String::from("author")), 
+        Token::OpenExpr,
+          Token::Ident(String::from("book")),
+          Token::PeriodSeparator,
+          Token::Ident(String::from("author")),
         Token::CloseExpr,
 
-      Token::Ident(String::from("size")), 
+      Token::Ident(String::from("size")),
         Token::AttrAssign,
-        Token::OpenExpr, 
+        Token::OpenExpr,
           Token::Unsafe,
             Token::OpenArgs,
               Token::ValueNumber(String::from("42")),
@@ -265,71 +257,57 @@ fn parse_simple_tag_with_attrs() {
     Node::Component(ComponentNode {
       name: String::from("Box"),
       attrs: vec![
-        Attr { 
-          name: String::from("width"), 
-          value: AttrValue::Literal(Static::NumberInt(123i64)),
-        },
-        Attr { 
-          name: String::from("height"), 
-          value: AttrValue::Literal(Static::NumberFloat(32.1f64))
-        },
-        Attr { 
-          name: String::from("title"), 
-          value: AttrValue::Literal(Static::String(String::from("\"Un cavaliere per l'affascinante spia\"")))
-        },
-        Attr { 
-          name: String::from("author"), 
+        Attr { name: String::from("width"),  value: AttrValue::Literal(Static::NumberInt(123i64)), span: sp(2, 3) },
+        Attr { name: String::from("height"), value: AttrValue::Literal(Static::NumberFloat(32.1f64)), span: sp(5, 3) },
+        Attr { name: String::from("title"),  value: AttrValue::Literal(Static::String(String::from("\"Un cavaliere per l'affascinante spia\""))), span: sp(8, 3) },
+        Attr {
+          name: String::from("author"),
           value: AttrValue::Dynamic(
-            SimpleExpression::Dot(
-              Box::new(SimpleExpression::Var(String::from("book"))), 
-              String::from("author")
-            )
-          ) 
+            SimpleExpression::Dot(Box::new(SimpleExpression::Var(String::from("book"))), String::from("author"))
+          ),
+          span: sp(11, 7),
         },
-        Attr { 
-          name: String::from("size"), 
-          value: AttrValue::UnsafeValue {
-            value: Static::NumberInt(42),
-            reason: String::from("\"needed for legacy API\""),
-          }
-        }
-        
+        Attr {
+          name: String::from("size"),
+          value: AttrValue::UnsafeValue { value: Static::NumberInt(42), reason: String::from("\"needed for legacy API\"") },
+          span: sp(18, 10),
+        },
       ],
-      children: vec![]
+      children: vec![],
+      span: sp(0, 30),
     })
   ));
-
 }
 
 #[test]
 fn parse_template() {
   let tokens = vec![
-    Token::StartTag, 
-      Token::Ident(String::from("Column")), 
-      Token::Ident(String::from("width")), 
+    Token::StartTag,
+      Token::Ident(String::from("Column")),
+      Token::Ident(String::from("width")),
         Token::AttrAssign,
         Token::ValueNumber(String::from("123")),
     Token::EndTag,
 
-      Token::StartTag, 
-        Token::Ident(String::from("Box")), 
-        Token::Ident(String::from("height")), 
+      Token::StartTag,
+        Token::Ident(String::from("Box")),
+        Token::Ident(String::from("height")),
           Token::AttrAssign,
           Token::ValueNumber(String::from("1.23")),
       Token::EndTag,
-      
-        Token::StartTag, 
-          Token::Ident(String::from("Text")), 
-          Token::Ident(String::from("title")), 
+
+        Token::StartTag,
+          Token::Ident(String::from("Text")),
+          Token::Ident(String::from("title")),
             Token::AttrAssign,
             Token::ValueString(String::from("\"Un cavaliere per l'affascinante spia\"")),
         Token::EndAutoclosingTag,
 
       Token::CloseTag(String::from("Box")),
 
-      Token::StartTag, 
-        Token::Ident(String::from("Text")), 
-        Token::Ident(String::from("title")), 
+      Token::StartTag,
+        Token::Ident(String::from("Text")),
+        Token::Ident(String::from("title")),
           Token::AttrAssign,
           Token::ValueString(String::from("\"Sedotta dal duca: la sua vendetta, il mio ventre, la nostra maledizione\"")),
       Token::EndAutoclosingTag,
@@ -342,69 +320,51 @@ fn parse_template() {
   assert_eq!(result, Ok(
     Node::Component(ComponentNode {
       name: String::from("Column"),
-      attrs: vec![
-        Attr { 
-          name: String::from("width"), 
-          value: AttrValue::Literal(Static::NumberInt(123i64)),
-        },
-      ],
+      attrs: vec![Attr { name: String::from("width"), value: AttrValue::Literal(Static::NumberInt(123i64)), span: sp(2, 3) }],
       children: vec![
         Node::Component(ComponentNode {
           name: String::from("Box"),
-          attrs: vec![
-            Attr { 
-              name: String::from("height"), 
-              value: AttrValue::Literal(Static::NumberFloat(1.23f64)),
-            },
-          ],
+          attrs: vec![Attr { name: String::from("height"), value: AttrValue::Literal(Static::NumberFloat(1.23f64)), span: sp(8, 3) }],
           children: vec![
             Node::Component(ComponentNode {
               name: String::from("Text"),
-              attrs: vec![
-                Attr { 
-                  name: String::from("title"), 
-                  value: AttrValue::Literal(Static::String(String::from("\"Un cavaliere per l'affascinante spia\""))),
-                },
-              ],
-              children: vec![]
+              attrs: vec![Attr { name: String::from("title"), value: AttrValue::Literal(Static::String(String::from("\"Un cavaliere per l'affascinante spia\""))), span: sp(14, 3) }],
+              children: vec![],
+              span: sp(12, 6),
             })
-          ]
+          ],
+          span: sp(6, 13),
         }),
         Node::Component(ComponentNode {
           name: String::from("Text"),
-          attrs: vec![
-            Attr { 
-              name: String::from("title"), 
-              value: AttrValue::Literal(Static::String(String::from("\"Sedotta dal duca: la sua vendetta, il mio ventre, la nostra maledizione\""))),
-            },
-          ],
-          children: vec![]
+          attrs: vec![Attr { name: String::from("title"), value: AttrValue::Literal(Static::String(String::from("\"Sedotta dal duca: la sua vendetta, il mio ventre, la nostra maledizione\""))), span: sp(21, 3) }],
+          children: vec![],
+          span: sp(19, 6),
         })
-      ]
+      ],
+      span: sp(0, 26),
     })
-  
   ));
-
 }
 
 #[test]
 fn parse_template_with_expr() {
   let tokens = vec![
-    Token::StartTag, 
-      Token::Ident(String::from("Column")), 
-      Token::Ident(String::from("width")), 
+    Token::StartTag,
+      Token::Ident(String::from("Column")),
+      Token::Ident(String::from("width")),
         Token::AttrAssign,
         Token::ValueNumber(String::from("123")),
     Token::EndTag,
 
-    Token::OpenExpr, 
-      Token::Ident(String::from("book")), 
-      Token::PeriodSeparator, 
-      Token::Ident(String::from("author")), 
+    Token::OpenExpr,
+      Token::Ident(String::from("book")),
+      Token::PeriodSeparator,
+      Token::Ident(String::from("author")),
     Token::CloseExpr,
 
-    Token::OpenExpr, 
-      Token::Ident(String::from("simpleVar")), 
+    Token::OpenExpr,
+      Token::Ident(String::from("simpleVar")),
     Token::CloseExpr,
 
     Token::CloseTag(String::from("Column"))
@@ -415,23 +375,18 @@ fn parse_template_with_expr() {
   assert_eq!(result, Ok(
     Node::Component(ComponentNode {
       name: String::from("Column"),
-      attrs: vec![
-        Attr { 
-          name: String::from("width"), 
-          value: AttrValue::Literal(Static::NumberInt(123i64)),
-        },
-      ],
+      attrs: vec![Attr { name: String::from("width"), value: AttrValue::Literal(Static::NumberInt(123i64)), span: sp(2, 3) }],
       children: vec![
         Node::Expr(ExpressionNode {
-          value: SimpleExpression::Dot(
-            Box::new(SimpleExpression::Var(String::from("book"))), 
-            String::from("author")
-          )
+          value: SimpleExpression::Dot(Box::new(SimpleExpression::Var(String::from("book"))), String::from("author")),
+          span: sp(6, 5),
         }),
         Node::Expr(ExpressionNode {
-          value: SimpleExpression::Var(String::from("simpleVar"))
+          value: SimpleExpression::Var(String::from("simpleVar")),
+          span: sp(11, 3),
         })
-      ]
+      ],
+      span: sp(0, 15),
     })
   ));
 }
@@ -439,9 +394,9 @@ fn parse_template_with_expr() {
 #[test]
 fn parse_template_with_slot() {
   let tokens = vec![
-    Token::StartTag, 
-      Token::Ident(String::from("Column")), 
-      Token::Ident(String::from("width")), 
+    Token::StartTag,
+      Token::Ident(String::from("Column")),
+      Token::Ident(String::from("width")),
         Token::AttrAssign,
         Token::ValueNumber(String::from("123")),
     Token::EndTag,
@@ -456,15 +411,9 @@ fn parse_template_with_slot() {
   assert_eq!(result, Ok(
     Node::Component(ComponentNode {
       name: String::from("Column"),
-      attrs: vec![
-        Attr { 
-          name: String::from("width"), 
-          value: AttrValue::Literal(Static::NumberInt(123i64)),
-        },
-      ],
-      children: vec![
-        Node::Slot(SlotNode {})
-      ]
+      attrs: vec![Attr { name: String::from("width"), value: AttrValue::Literal(Static::NumberInt(123i64)), span: sp(2, 3) }],
+      children: vec![Node::Slot(SlotNode { span: sp(6, 1) })],
+      span: sp(0, 8),
     })
   ));
 }
@@ -472,9 +421,9 @@ fn parse_template_with_slot() {
 #[test]
 fn parse_template_with_unsafe_block() {
   let tokens = vec![
-    Token::StartTag, 
-      Token::Ident(String::from("Column")), 
-      Token::Ident(String::from("width")), 
+    Token::StartTag,
+      Token::Ident(String::from("Column")),
+      Token::Ident(String::from("width")),
         Token::AttrAssign,
         Token::ValueNumber(String::from("123")),
     Token::EndTag,
@@ -492,18 +441,11 @@ fn parse_template_with_unsafe_block() {
   assert_eq!(result, Ok(
     Node::Component(ComponentNode {
       name: String::from("Column"),
-      attrs: vec![
-        Attr { 
-          name: String::from("width"), 
-          value: AttrValue::Literal(Static::NumberInt(123i64)),
-        },
-      ],
+      attrs: vec![Attr { name: String::from("width"), value: AttrValue::Literal(Static::NumberInt(123i64)), span: sp(2, 3) }],
       children: vec![
-        Node::Unsafe(UnsafeNode { 
-          reason: String::from("\"xss\""), 
-          children: String::from("test") 
-        })
-      ]
+        Node::Unsafe(UnsafeNode { reason: String::from("\"xss\""), children: String::from("test"), span: sp(6, 7) })
+      ],
+      span: sp(0, 14),
     })
   ));
 }
@@ -516,12 +458,12 @@ fn parse_if_then_component() {
     Token::OpenIf,
       Token::IfCondition,
       Token::AttrAssign,
-      Token::OpenExpr, 
-        Token::Ident(String::from("my")), 
-        Token::PeriodSeparator, 
-        Token::Ident(String::from("predicate")), 
-        Token::PeriodSeparator, 
-        Token::Ident(String::from("expression")), 
+      Token::OpenExpr,
+        Token::Ident(String::from("my")),
+        Token::PeriodSeparator,
+        Token::Ident(String::from("predicate")),
+        Token::PeriodSeparator,
+        Token::Ident(String::from("expression")),
       Token::CloseExpr,
     Token::EndTag,
       Token::StartTag,
@@ -536,20 +478,17 @@ fn parse_if_then_component() {
     Node::If(IfNode {
       condition: SimpleExpression::Dot(
         Box::new(SimpleExpression::Dot(
-          Box::new(SimpleExpression::Var(String::from("my"))), 
+          Box::new(SimpleExpression::Var(String::from("my"))),
           String::from("predicate")
-        )), 
+        )),
         String::from("expression")
       ),
       then_children: vec![
-        Node::Component(ComponentNode { 
-          name: String::from("Box"), 
-          attrs: vec![], 
-          children: vec![] 
-        })
+        Node::Component(ComponentNode { name: String::from("Box"), attrs: vec![], children: vec![], span: sp(11, 3) })
       ],
       else_if_children: vec![],
       else_child: None,
+      span: sp(0, 15),
     })
   ));
 }
@@ -560,12 +499,12 @@ fn parse_if_then_component_with_else() {
     Token::OpenIf,
       Token::IfCondition,
       Token::AttrAssign,
-      Token::OpenExpr, 
-        Token::Ident(String::from("my")), 
-        Token::PeriodSeparator, 
-        Token::Ident(String::from("predicate")), 
-        Token::PeriodSeparator, 
-        Token::Ident(String::from("expression")), 
+      Token::OpenExpr,
+        Token::Ident(String::from("my")),
+        Token::PeriodSeparator,
+        Token::Ident(String::from("predicate")),
+        Token::PeriodSeparator,
+        Token::Ident(String::from("expression")),
       Token::CloseExpr,
     Token::EndTag,
 
@@ -586,31 +525,23 @@ fn parse_if_then_component_with_else() {
 
   let result = node_parser().parse(&tokens).into_result();
 
-  
   assert_eq!(result, Ok(
     Node::If(IfNode {
       condition: SimpleExpression::Dot(
         Box::new(SimpleExpression::Dot(
-          Box::new(SimpleExpression::Var(String::from("my"))), 
+          Box::new(SimpleExpression::Var(String::from("my"))),
           String::from("predicate")
-        )), 
+        )),
         String::from("expression")
       ),
       then_children: vec![
-        Node::Component(ComponentNode {
-          name: String::from("Box"),
-          attrs: vec![],
-          children: vec![]
-        })
+        Node::Component(ComponentNode { name: String::from("Box"), attrs: vec![], children: vec![], span: sp(11, 3) })
       ],
       else_if_children: vec![],
       else_child: Option::Some(vec![
-        Node::Component(ComponentNode {
-          name: String::from("Box"),
-          attrs: vec![],
-          children: vec![]
-        })
+        Node::Component(ComponentNode { name: String::from("Box"), attrs: vec![], children: vec![], span: sp(17, 3) })
       ]),
+      span: sp(0, 21),
     })
   ));
 }
@@ -621,12 +552,12 @@ fn parse_if_then_component_with_elseif_and_else() {
     Token::OpenIf,
       Token::IfCondition,
       Token::AttrAssign,
-      Token::OpenExpr, 
-        Token::Ident(String::from("my")), 
-        Token::PeriodSeparator, 
-        Token::Ident(String::from("predicate")), 
-        Token::PeriodSeparator, 
-        Token::Ident(String::from("expression")), 
+      Token::OpenExpr,
+        Token::Ident(String::from("my")),
+        Token::PeriodSeparator,
+        Token::Ident(String::from("predicate")),
+        Token::PeriodSeparator,
+        Token::Ident(String::from("expression")),
       Token::CloseExpr,
     Token::EndTag,
 
@@ -637,18 +568,17 @@ fn parse_if_then_component_with_elseif_and_else() {
     Token::CloseTag(String::from("if")),
 
     // first elseIf
-
     Token::OpenElseIf,
       Token::IfCondition,
         Token::AttrAssign,
-        Token::OpenExpr, 
-          Token::Ident(String::from("my")), 
-          Token::PeriodSeparator, 
-          Token::Ident(String::from("predicate")), 
-          Token::PeriodSeparator, 
-          Token::Ident(String::from("expression")), 
-          Token::PeriodSeparator, 
-          Token::Ident(String::from("elseif1")), 
+        Token::OpenExpr,
+          Token::Ident(String::from("my")),
+          Token::PeriodSeparator,
+          Token::Ident(String::from("predicate")),
+          Token::PeriodSeparator,
+          Token::Ident(String::from("expression")),
+          Token::PeriodSeparator,
+          Token::Ident(String::from("elseif1")),
         Token::CloseExpr,
       Token::EndTag,
 
@@ -666,14 +596,14 @@ fn parse_if_then_component_with_elseif_and_else() {
     Token::OpenElseIf,
       Token::IfCondition,
         Token::AttrAssign,
-        Token::OpenExpr, 
-          Token::Ident(String::from("my")), 
-          Token::PeriodSeparator, 
-          Token::Ident(String::from("predicate")), 
-          Token::PeriodSeparator, 
-          Token::Ident(String::from("expression")), 
-          Token::PeriodSeparator, 
-          Token::Ident(String::from("elseif2")), 
+        Token::OpenExpr,
+          Token::Ident(String::from("my")),
+          Token::PeriodSeparator,
+          Token::Ident(String::from("predicate")),
+          Token::PeriodSeparator,
+          Token::Ident(String::from("expression")),
+          Token::PeriodSeparator,
+          Token::Ident(String::from("elseif2")),
         Token::CloseExpr,
       Token::EndTag,
 
@@ -704,63 +634,58 @@ fn parse_if_then_component_with_elseif_and_else() {
     Node::If(IfNode {
       condition: SimpleExpression::Dot(
         Box::new(SimpleExpression::Dot(
-          Box::new(SimpleExpression::Var(String::from("my"))), 
+          Box::new(SimpleExpression::Var(String::from("my"))),
           String::from("predicate")
-        )), 
+        )),
         String::from("expression")
       ),
       then_children: vec![
-        Node::Component(ComponentNode {
-          name: String::from("Box"),
-          attrs: vec![],
-          children: vec![]
-        })
+        Node::Component(ComponentNode { name: String::from("Box"), attrs: vec![], children: vec![], span: sp(11, 3) })
       ],
       else_if_children: vec![
         IfNode {
           condition: SimpleExpression::Dot(
             Box::new(SimpleExpression::Dot(
               Box::new(SimpleExpression::Dot(
-                Box::new(SimpleExpression::Var(String::from("my"))), 
+                Box::new(SimpleExpression::Var(String::from("my"))),
                 String::from("predicate")
-              )), 
+              )),
               String::from("expression")
-            )), 
+            )),
             String::from("elseif1")
           ),
           then_children: vec![
-            Node::Component(ComponentNode { name: String::from("Box"), attrs: vec![], children: vec![] }),
-            Node::Component(ComponentNode { name: String::from("Box"), attrs: vec![], children: vec![] }),
+            Node::Component(ComponentNode { name: String::from("Box"), attrs: vec![], children: vec![], span: sp(28, 3) }),
+            Node::Component(ComponentNode { name: String::from("Box"), attrs: vec![], children: vec![], span: sp(31, 3) }),
           ],
           else_if_children: vec![],
           else_child: None,
+          span: sp(15, 20),
         },
         IfNode {
           condition: SimpleExpression::Dot(
             Box::new(SimpleExpression::Dot(
               Box::new(SimpleExpression::Dot(
-                Box::new(SimpleExpression::Var(String::from("my"))), 
+                Box::new(SimpleExpression::Var(String::from("my"))),
                 String::from("predicate")
-              )), 
+              )),
               String::from("expression")
-            )), 
+            )),
             String::from("elseif2")
           ),
           then_children: vec![
-            Node::Component(ComponentNode { name: String::from("Box"), attrs: vec![], children: vec![] }),
-            Node::Component(ComponentNode { name: String::from("Box"), attrs: vec![], children: vec![] }),
+            Node::Component(ComponentNode { name: String::from("Box"), attrs: vec![], children: vec![], span: sp(48, 3) }),
+            Node::Component(ComponentNode { name: String::from("Box"), attrs: vec![], children: vec![], span: sp(51, 3) }),
           ],
           else_if_children: vec![],
           else_child: None,
+          span: sp(35, 20),
         },
       ],
       else_child: Option::Some(vec![
-        Node::Component(ComponentNode {
-          name: String::from("Box"),
-          attrs: vec![],
-          children: vec![]
-        })
+        Node::Component(ComponentNode { name: String::from("Box"), attrs: vec![], children: vec![], span: sp(57, 3) })
       ]),
+      span: sp(0, 61),
     })
   ));
 }
@@ -777,12 +702,7 @@ fn parse_body_with_empty_template() {
   ];
 
   let result = body_parser().parse(&tokens).into_result();
-  assert_eq!(result, Ok(
-      Body {
-        logic_block: String::from("const test = 123;"),
-        template: vec![]
-      }
-    ));
+  assert_eq!(result, Ok(Body { logic_block: String::from("const test = 123;"), template: vec![] }));
 }
 
 #[test]
@@ -791,17 +711,17 @@ fn parse_body_with_one_root() {
     Token::OpenBody,
       Token::LogicBlock(String::from("const test = 123;")),
       Token::Divider,
-      
-      Token::StartTag, 
-        Token::Ident(String::from("Box")), 
-        Token::Ident(String::from("height")), 
+
+      Token::StartTag,
+        Token::Ident(String::from("Box")),
+        Token::Ident(String::from("height")),
           Token::AttrAssign,
           Token::ValueNumber(String::from("1.23")),
       Token::EndTag,
-      
-        Token::StartTag, 
-          Token::Ident(String::from("Text")), 
-          Token::Ident(String::from("title")), 
+
+        Token::StartTag,
+          Token::Ident(String::from("Text")),
+          Token::Ident(String::from("title")),
             Token::AttrAssign,
             Token::ValueString(String::from("\"Un cavaliere per l'affascinante spia\"")),
         Token::EndAutoclosingTag,
@@ -813,33 +733,25 @@ fn parse_body_with_one_root() {
 
   let result = body_parser().parse(&tokens).into_result();
   assert_eq!(result, Ok(
-      Body {
-        logic_block: String::from("const test = 123;"),
-        template: vec![
-          Node::Component(ComponentNode {
-            name: String::from("Box"),
-            attrs: vec![
-              Attr { 
-                name: String::from("height"), 
-                value: AttrValue::Literal(Static::NumberFloat(1.23f64)),
-              },
-            ],
-            children: vec![
-              Node::Component(ComponentNode {
-                name: String::from("Text"),
-                attrs: vec![
-                  Attr { 
-                    name: String::from("title"), 
-                    value: AttrValue::Literal(Static::String(String::from("\"Un cavaliere per l'affascinante spia\""))),
-                  },
-                ],
-                children: vec![]
-              })
-            ]
-          })
-        ]
-      }
-    ));
+    Body {
+      logic_block: String::from("const test = 123;"),
+      template: vec![
+        Node::Component(ComponentNode {
+          name: String::from("Box"),
+          attrs: vec![Attr { name: String::from("height"), value: AttrValue::Literal(Static::NumberFloat(1.23f64)), span: sp(5, 3) }],
+          children: vec![
+            Node::Component(ComponentNode {
+              name: String::from("Text"),
+              attrs: vec![Attr { name: String::from("title"), value: AttrValue::Literal(Static::String(String::from("\"Un cavaliere per l'affascinante spia\""))), span: sp(11, 3) }],
+              children: vec![],
+              span: sp(9, 6),
+            })
+          ],
+          span: sp(3, 13),
+        })
+      ]
+    }
+  ));
 }
 
 #[test]
@@ -847,10 +759,10 @@ fn parse_body_with_no_logic_block() {
   let tokens = vec![
     Token::OpenBody,
       Token::Divider,
-      
-      Token::StartTag, 
-        Token::Ident(String::from("Text")), 
-        Token::Ident(String::from("title")), 
+
+      Token::StartTag,
+        Token::Ident(String::from("Text")),
+        Token::Ident(String::from("title")),
           Token::AttrAssign,
           Token::ValueString(String::from("\"Un cavaliere per l'affascinante spia\"")),
       Token::EndAutoclosingTag,
@@ -860,32 +772,28 @@ fn parse_body_with_no_logic_block() {
 
   let result = body_parser().parse(&tokens).into_result();
   assert_eq!(result, Ok(
-      Body {
-        logic_block: String::from(""),
-        template: vec![
-          Node::Component(ComponentNode {
-            name: String::from("Text"),
-            attrs: vec![
-              Attr { 
-                name: String::from("title"), 
-                value: AttrValue::Literal(Static::String(String::from("\"Un cavaliere per l'affascinante spia\""))),
-              },
-            ],
-            children: vec![]
-          })
-        ]
-      }
-    ));
+    Body {
+      logic_block: String::from(""),
+      template: vec![
+        Node::Component(ComponentNode {
+          name: String::from("Text"),
+          attrs: vec![Attr { name: String::from("title"), value: AttrValue::Literal(Static::String(String::from("\"Un cavaliere per l'affascinante spia\""))), span: sp(4, 3) }],
+          children: vec![],
+          span: sp(2, 6),
+        })
+      ]
+    }
+  ));
 }
 
 #[test]
 fn parse_component_def() {
   let tokens = vec![
-    Token::KwComponent, 
+    Token::KwComponent,
     Token::Ident(String::from("Foo")),
     Token::OpenArgs,
-    Token::Ident(String::from("book")), 
-    Token::TypeAssign, 
+    Token::Ident(String::from("book")),
+    Token::TypeAssign,
     Token::Ident(String::from("BookData")),
     Token::CloseArgs,
     Token::OpenBody,
@@ -896,23 +804,18 @@ fn parse_component_def() {
 
   let result = declaration_parser().parse(&tokens).into_result();
   assert_eq!(result, Ok(
-      Declaration::Component { 
-        name: String::from("Foo"), 
-        props: vec![
-          Prop { name: String::from("book"), type_str: String::from("BookData")}
-        ],
-        body: Body {
-          logic_block: String::from("const test = 123;"),
-          template: vec![]
-        }
-      }
-    ));
+    Declaration::Component {
+      name: String::from("Foo"),
+      props: vec![Prop { name: String::from("book"), type_str: String::from("BookData") }],
+      body: Body { logic_block: String::from("const test = 123;"), template: vec![] }
+    }
+  ));
 }
 
 #[test]
 fn parse_layout_def() {
   let tokens = vec![
-    Token::KwLayout, 
+    Token::KwLayout,
     Token::Ident(String::from("Foo")),
     Token::OpenBody,
       Token::LogicBlock(String::from("const test = 123;")),
@@ -922,24 +825,21 @@ fn parse_layout_def() {
 
   let result = declaration_parser().parse(&tokens).into_result();
   assert_eq!(result, Ok(
-      Declaration::Layout { 
-        name: String::from("Foo"),
-        body: Body {
-          logic_block: String::from("const test = 123;"),
-          template: vec![]
-        }
-      }
-    ));
+    Declaration::Layout {
+      name: String::from("Foo"),
+      body: Body { logic_block: String::from("const test = 123;"), template: vec![] }
+    }
+  ));
 }
 
 #[test]
 fn parse_page_def() {
   let tokens = vec![
-    Token::KwPage, 
+    Token::KwPage,
     Token::Ident(String::from("Foo")),
     Token::OpenArgs,
-    Token::Ident(String::from("book")), 
-    Token::TypeAssign, 
+    Token::Ident(String::from("book")),
+    Token::TypeAssign,
     Token::Ident(String::from("BookData")),
     Token::CloseArgs,
     Token::OpenBody,
@@ -950,15 +850,10 @@ fn parse_page_def() {
 
   let result = declaration_parser().parse(&tokens).into_result();
   assert_eq!(result, Ok(
-    Declaration::Page { 
-      name: String::from("Foo"), 
-      props: vec![
-        Prop { name: String::from("book"), type_str: String::from("BookData")}
-      ],
-      body: Body {
-        logic_block: String::from("const test = 123;"),
-        template: vec![]
-      }
+    Declaration::Page {
+      name: String::from("Foo"),
+      props: vec![Prop { name: String::from("book"), type_str: String::from("BookData") }],
+      body: Body { logic_block: String::from("const test = 123;"), template: vec![] }
     }
   ));
 }
@@ -966,7 +861,7 @@ fn parse_page_def() {
 #[test]
 fn parse_ori_file() {
   let tokens = [
-    Token::KwComponent, 
+    Token::KwComponent,
     Token::Ident(String::from("Foo")),
     Token::OpenArgs,
       Token::Ident(String::from("book")), Token::TypeAssign, Token::Ident(String::from("BookData")),
@@ -985,16 +880,13 @@ fn parse_ori_file() {
   assert_eq!(result, Ok(
     OriFile {
       declarations: vec![
-        Declaration::Component { 
-          name: String::from("Foo"), 
+        Declaration::Component {
+          name: String::from("Foo"),
           props: vec![
-            Prop { name: String::from("book"), type_str: String::from("BookData")},
-            Prop { name: String::from("author"), type_str: String::from("AuthorData")}
+            Prop { name: String::from("book"), type_str: String::from("BookData") },
+            Prop { name: String::from("author"), type_str: String::from("AuthorData") }
           ],
-          body: Body {
-            logic_block: String::from("const test = 123;"),
-            template: vec![]
-          }
+          body: Body { logic_block: String::from("const test = 123;"), template: vec![] }
         }
       ]
     }
@@ -1045,7 +937,6 @@ fn parse_attr_simple_expression_var_missing_close() {
 
 #[test]
 fn parse_attr_simple_expression_dot_two_segments() {
-  // {{book.author}} → Dot(Var("book"), "author")
   let tokens = vec![
     Token::OpenExpr,
     Token::Ident(String::from("book")),
@@ -1055,16 +946,12 @@ fn parse_attr_simple_expression_dot_two_segments() {
   ];
   let result = attr_simple_expression_dot_value_parser().parse(&tokens).into_result();
   assert_eq!(result, Ok(
-    SimpleExpression::Dot(
-      Box::new(SimpleExpression::Var(String::from("book"))),
-      String::from("author"),
-    )
+    SimpleExpression::Dot(Box::new(SimpleExpression::Var(String::from("book"))), String::from("author"))
   ));
 }
 
 #[test]
 fn parse_attr_simple_expression_dot_three_segments() {
-  // {{book.author.id}} → Dot(Dot(Var("book"), "author"), "id")
   let tokens = vec![
     Token::OpenExpr,
     Token::Ident(String::from("book")),
@@ -1077,10 +964,7 @@ fn parse_attr_simple_expression_dot_three_segments() {
   let result = attr_simple_expression_dot_value_parser().parse(&tokens).into_result();
   assert_eq!(result, Ok(
     SimpleExpression::Dot(
-      Box::new(SimpleExpression::Dot(
-        Box::new(SimpleExpression::Var(String::from("book"))),
-        String::from("author"),
-      )),
+      Box::new(SimpleExpression::Dot(Box::new(SimpleExpression::Var(String::from("book"))), String::from("author"))),
       String::from("id"),
     )
   ));
@@ -1088,7 +972,6 @@ fn parse_attr_simple_expression_dot_three_segments() {
 
 #[test]
 fn parse_attr_simple_expression_dot_missing_segment() {
-  // {{book.}} → error
   let tokens = vec![
     Token::OpenExpr,
     Token::Ident(String::from("book")),
@@ -1110,7 +993,8 @@ fn parse_attr_literal_string() {
   let result = attr_parser().parse(&tokens).into_result();
   assert_eq!(result, Ok(Attr {
     name: String::from("color"),
-    value: AttrValue::Literal(Static::String(String::from("\"red\"")))
+    value: AttrValue::Literal(Static::String(String::from("\"red\""))),
+    span: sp(0, 3),
   }));
 }
 
@@ -1124,7 +1008,8 @@ fn parse_attr_literal_int() {
   let result = attr_parser().parse(&tokens).into_result();
   assert_eq!(result, Ok(Attr {
     name: String::from("size"),
-    value: AttrValue::Literal(Static::NumberInt(12))
+    value: AttrValue::Literal(Static::NumberInt(12)),
+    span: sp(0, 3),
   }));
 }
 
@@ -1146,7 +1031,7 @@ fn parse_attr_missing_value() {
   assert!(attr_parser().parse(&tokens).into_result().is_err());
 }
 
-// --- attr_usafe_value_parser ---
+// --- attr_unsafe_value_parser ---
 
 #[test]
 fn parse_attr_unsafe_value_int() {
@@ -1207,7 +1092,6 @@ fn parse_attr_unsafe_value_string() {
 
 #[test]
 fn parse_attr_unsafe_value_missing_reason() {
-  // comma and reason are mandatory
   let tokens = vec![
     Token::Unsafe,
     Token::OpenArgs,
@@ -1260,8 +1144,9 @@ fn parse_each_without_index_alias() {
       alias: String::from("book"),
       index_alias: None,
       children: vec![
-        Node::Component(ComponentNode { name: String::from("Box"), attrs: vec![], children: vec![] }),
+        Node::Component(ComponentNode { name: String::from("Box"), attrs: vec![], children: vec![], span: sp(10, 3) }),
       ],
+      span: sp(0, 14),
     })
   ));
 }
@@ -1287,15 +1172,15 @@ fn parse_each_with_index_alias() {
       alias: String::from("book"),
       index_alias: Some(SimpleExpression::Var(String::from("idx"))),
       children: vec![
-        Node::Component(ComponentNode { name: String::from("Box"), attrs: vec![], children: vec![] }),
+        Node::Component(ComponentNode { name: String::from("Box"), attrs: vec![], children: vec![], span: sp(13, 3) }),
       ],
+      span: sp(0, 17),
     })
   ));
 }
 
 #[test]
 fn parse_each_with_dot_collection() {
-  // collection può essere dot expression: {{page.books}}
   let tokens = vec![
     Token::OpenEach,
       Token::EachCollection, Token::AttrAssign,
@@ -1312,15 +1197,13 @@ fn parse_each_with_dot_collection() {
 
   assert_eq!(result, Ok(
     Node::Each(EachNode {
-      collection: SimpleExpression::Dot(
-        Box::new(SimpleExpression::Var(String::from("page"))),
-        String::from("books"),
-      ),
+      collection: SimpleExpression::Dot(Box::new(SimpleExpression::Var(String::from("page"))), String::from("books")),
       alias: String::from("book"),
       index_alias: None,
       children: vec![
-        Node::Component(ComponentNode { name: String::from("Box"), attrs: vec![], children: vec![] }),
+        Node::Component(ComponentNode { name: String::from("Box"), attrs: vec![], children: vec![], span: sp(12, 3) }),
       ],
+      span: sp(0, 16),
     })
   ));
 }
@@ -1374,7 +1257,6 @@ fn parse_returns_ori_file_on_valid_tokens() {
 
 #[test]
 fn parse_returns_parse_errors_on_invalid_tokens() {
-    // bare Ident with no keyword — structurally invalid
     let tokens = vec![
         Token::Ident(String::from("Card")),
         Token::Eof,
@@ -1405,9 +1287,8 @@ fn parse_error_carries_p001_code() {
 
 #[test]
 fn parse_error_has_named_source() {
-    let tokens = vec![Token::Eof]; // empty file — no declarations, but Eof alone is valid
+    let tokens = vec![Token::Eof];
     let src = Arc::new(String::from(""));
-    // valid empty file should parse fine
     let result = parse(&tokens, "empty.ori", src);
     assert!(result.is_ok());
 }

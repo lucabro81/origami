@@ -1,4 +1,4 @@
-use chumsky::{prelude::*};
+use chumsky::prelude::*;
 use origami_runtime::{Attr, AttrValue, SimpleExpression, Static, Token};
 
 pub fn attr_static_string_value_parser<'src>() -> impl Parser<'src, &'src [Token], Static, extra::Err<Rich<'src, Token>>> {
@@ -96,5 +96,8 @@ pub fn attr_parser<'src>() -> impl Parser<'src, &'src [Token], Attr, extra::Err<
   select! { Token::Ident(name) => name }
     .then_ignore(just(Token::AttrAssign))
     .then(attr_value_parser())
-    .map(|(name, value)| Attr { name, value })
+    .map_with(|(name, value), extra| {
+        let s = extra.span();
+        Attr { name, value, span: miette::SourceSpan::from(s.start..s.end) }
+    })
 }
